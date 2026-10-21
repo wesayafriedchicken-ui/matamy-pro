@@ -9,8 +9,10 @@ import DispatchDelivery from '@/pages/DispatchDelivery';
 import DispatchDeliveryNew from '@/pages/DispatchDeliveryNew';
 import DispatchTracking from '@/pages/DispatchTracking';
 import DispatchCustody from '@/pages/DispatchCustody';
+import DispatchDeliveryZones from '@/pages/DispatchDeliveryZones';
 import MenuManagement from '@/pages/MenuManagement';
 import InventoryStock from '@/pages/InventoryStock';
+import InventoryItemDetail from '@/pages/InventoryItemDetail';
 import InventoryRecipes from '@/pages/InventoryRecipes';
 import DigitalStore from '@/pages/DigitalStore';
 import DigitalStoreBuilder from '@/pages/DigitalStoreBuilder';
@@ -40,8 +42,10 @@ export default function App() {
             <Route path="/dispatch/delivery/:id" element={<DispatchDeliveryNew />} />
             <Route path="/dispatch/tracking" element={<DispatchTracking />} />
             <Route path="/dispatch/custody" element={<DispatchCustody />} />
+            <Route path="/dispatch/delivery-zones" element={<DispatchDeliveryZones />} />
             <Route path="/menu" element={<MenuManagement />} />
             <Route path="/inventory" element={<InventoryStock />} />
+            <Route path="/inventory/:id" element={<InventoryItemDetail />} />
             <Route path="/inventory/recipes" element={<InventoryRecipes />} />
             <Route path="/digital-store" element={<DigitalStore />} />
             <Route path="/digital-store/builder" element={<DigitalStoreBuilder />} />

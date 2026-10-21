@@ -60,6 +60,10 @@ export default function DispatchAssignment() {
           <UtensilsCrossed className="w-4 h-4" />
           العهد والخزينة
         </Link>
+        <Link to="/dispatch/delivery-zones" className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium text-navy-300 hover:text-white transition-all">
+          <MapPin className="w-4 h-4" />
+          مناطق وزونات التوصيل
+        </Link>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">

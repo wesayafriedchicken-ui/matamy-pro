@@ -23,6 +23,7 @@ import {
   DollarSign,
   Sparkles,
   Users,
+  MapPin,
 } from 'lucide-react';
 
 type StepId =
@@ -346,6 +347,14 @@ export default function DispatchDeliveryNew() {
         >
           <UtensilsCrossed className="w-4 h-4" />
           العهد والخزينة
+        </Link>
+
+        <Link
+          to="/dispatch/delivery-zones"
+          className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold text-navy-400 hover:text-white transition-all"
+        >
+          <MapPin className="w-4 h-4" />
+          مناطق وزونات التوصيل
         </Link>
       </div>
 

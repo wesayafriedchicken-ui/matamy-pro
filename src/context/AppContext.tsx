@@ -76,10 +76,17 @@ interface AppContextValue {
   updateMenuItem: (item: MenuItem) => void;
   addMenuItem: (item: MenuItem) => void;
   deleteMenuItem: (id: string) => void;
+  deleteAllMenuItems: () => Promise<void>;
   updateInventoryItem: (item: InventoryItem) => void;
   addInventoryItem: (item: InventoryItem) => void;
   deleteInventoryItem: (id: string) => void;
+  resetToDefaultMenu: () => Promise<void>;
+  resetToDefaultInventory: () => void;
   adjustStock: (itemId: string, delta: number) => void;
+  inventoryCategories: InventoryCategoryOption[];
+  inventoryUnits: InventoryUnitOption[];
+  addInventoryCategory: (labelAr: string, customId?: string) => InventoryCategoryOption;
+  addInventoryUnit: (labelAr: string, customId?: string) => InventoryUnitOption;
   showToast: (message: string, type?: Toast['type']) => void;
   dismissToast: (id: string) => void;
   language: 'ar' | 'en';
@@ -97,6 +104,48 @@ interface AppContextValue {
   isSearchOpen: boolean;
   setIsSearchOpen: (open: boolean) => void;
 }
+
+export interface InventoryCategoryOption {
+  id: string;
+  labelAr: string;
+}
+
+export interface InventoryUnitOption {
+  id: string;
+  labelAr: string;
+}
+
+export const DEFAULT_INVENTORY_CATEGORIES: InventoryCategoryOption[] = [
+  { id: 'spices', labelAr: 'التوابل' },
+  { id: 'sauces', labelAr: 'الصوصات' },
+  { id: 'bread', labelAr: 'العيش' },
+  { id: 'proteins', labelAr: 'البروتينات' },
+  { id: 'dairy', labelAr: 'الألبان والجبن' },
+  { id: 'vegetables', labelAr: 'الخضار والإضافات' },
+  { id: 'raw_materials', labelAr: 'الخامات' },
+  { id: 'packaging', labelAr: 'الباكينج ومستلزمات التشغيل' },
+];
+
+export const DEFAULT_INVENTORY_UNITS: InventoryUnitOption[] = [
+  // وحدات الشراء والتخزين (Purchase / Storage Units)
+  { id: 'basket', labelAr: 'باسكت' },
+  { id: 'carton', labelAr: 'كرتونة' },
+  { id: 'jerrycan', labelAr: 'جيركن' },
+  { id: 'bag', labelAr: 'كيس' },
+  { id: 'gallon', labelAr: 'جالون' },
+  { id: 'pack', labelAr: 'عبوة / باكت' },
+  { id: 'box', labelAr: 'صندوق' },
+  { id: 'can', labelAr: 'علبة' },
+  { id: 'roll', labelAr: 'بكرة' },
+  { id: 'sheet', labelAr: 'فرخ / ورقة' },
+  // وحدات الاستهلاك والوصفات (Recipe / Base Units)
+  { id: 'pcs', labelAr: 'قطعة' },
+  { id: 'grams', labelAr: 'جرام' },
+  { id: 'ml', labelAr: 'مللي' },
+  { id: 'slice', labelAr: 'شريحة' },
+  { id: 'kg', labelAr: 'كيلو' },
+  { id: 'liters', labelAr: 'لتر' },
+];
 
 const initialNotifications: AppNotification[] = [
   {
@@ -170,6 +219,33 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [dbStatus, setDbStatus] = useState<DbStatus>('checking');
   const [dbError, setDbError] = useState<string | undefined>();
   const [isDbModalOpen, setIsDbModalOpen] = useState(false);
+
+  // Inventory Custom Categories and Units State
+  const [inventoryCategories, setInventoryCategories] = useState<InventoryCategoryOption[]>(() => {
+    const saved = localStorage.getItem('app_inventory_categories');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      } catch (e) {
+        console.warn('Failed to parse inventory categories:', e);
+      }
+    }
+    return DEFAULT_INVENTORY_CATEGORIES;
+  });
+
+  const [inventoryUnits, setInventoryUnits] = useState<InventoryUnitOption[]>(() => {
+    const saved = localStorage.getItem('app_inventory_units');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      } catch (e) {
+        console.warn('Failed to parse inventory units:', e);
+      }
+    }
+    return DEFAULT_INVENTORY_UNITS;
+  });
 
   // Language State
   const [language, setLanguageState] = useState<'ar' | 'en'>(() => {
@@ -494,6 +570,37 @@ export function AppProvider({ children }: { children: ReactNode }) {
     dbDeleteInventoryItem(id);
   }, [showToast]);
 
+  const deleteAllMenuItems = useCallback(async () => {
+    setMenuItems([]);
+    showToast('تم مسح جميع أصناف المنيو بنجاح', 'info');
+    try {
+      await supabase.from('menu_items').delete().neq('id', '___safe___');
+    } catch (e) {
+      console.warn('Error deleting all menu items from Supabase:', e);
+    }
+  }, [showToast]);
+
+  const resetToDefaultMenu = useCallback(async () => {
+    setMenuItems(mockMenuItems);
+    showToast(`تم مسح المنيو واستعادة منيو ناين فرايز الرسمي (${mockMenuItems.length} صنف) بنجاح`, 'success');
+    try {
+      await supabase.from('menu_items').delete().neq('id', '___safe___');
+      for (const item of mockMenuItems) {
+        await dbUpsertMenuItem(item);
+      }
+    } catch (e) {
+      console.warn('Error resetting menu items in Supabase:', e);
+    }
+  }, [showToast]);
+
+  const resetToDefaultInventory = useCallback(() => {
+    setInventory(mockInventory);
+    showToast('تمت استعادة قائمة المواد الخام الرسمية (45 مادة) بنجاح', 'success');
+    mockInventory.forEach((item) => {
+      dbUpsertInventoryItem(item);
+    });
+  }, [showToast]);
+
   const adjustStock = useCallback((itemId: string, delta: number) => {
     setInventory((prev) =>
       prev.map((i) => {
@@ -506,6 +613,48 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }),
     );
   }, []);
+
+  const addInventoryCategory = useCallback(
+    (labelAr: string, customId?: string) => {
+      const trimmed = labelAr.trim();
+      const existing = inventoryCategories.find(
+        (c) => c.labelAr.toLowerCase() === trimmed.toLowerCase() || (customId && c.id === customId),
+      );
+      if (existing) return existing;
+
+      const id = customId && customId.trim() ? customId.trim() : `cat_${Date.now()}`;
+      const newCat: InventoryCategoryOption = { id, labelAr: trimmed };
+      setInventoryCategories((prev) => {
+        const updated = [...prev, newCat];
+        localStorage.setItem('app_inventory_categories', JSON.stringify(updated));
+        return updated;
+      });
+      showToast(`تمت إضافة التصنيف الجديد: "${trimmed}" بنجاح`, 'success');
+      return newCat;
+    },
+    [inventoryCategories, showToast],
+  );
+
+  const addInventoryUnit = useCallback(
+    (labelAr: string, customId?: string) => {
+      const trimmed = labelAr.trim();
+      const existing = inventoryUnits.find(
+        (u) => u.labelAr.toLowerCase() === trimmed.toLowerCase() || (customId && u.id === customId),
+      );
+      if (existing) return existing;
+
+      const id = customId && customId.trim() ? customId.trim() : `unit_${Date.now()}`;
+      const newUnit: InventoryUnitOption = { id, labelAr: trimmed };
+      setInventoryUnits((prev) => {
+        const updated = [...prev, newUnit];
+        localStorage.setItem('app_inventory_units', JSON.stringify(updated));
+        return updated;
+      });
+      showToast(`تمت إضافة وحدة القياس الجديدة: "${trimmed}" بنجاح`, 'success');
+      return newUnit;
+    },
+    [inventoryUnits, showToast],
+  );
 
   return (
     <AppContext.Provider
@@ -536,10 +685,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
         updateMenuItem,
         addMenuItem,
         deleteMenuItem,
+        deleteAllMenuItems,
+        resetToDefaultMenu,
         updateInventoryItem,
         addInventoryItem,
         deleteInventoryItem,
+        resetToDefaultInventory,
         adjustStock,
+        inventoryCategories,
+        inventoryUnits,
+        addInventoryCategory,
+        addInventoryUnit,
         showToast,
         dismissToast,
         language,

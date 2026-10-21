@@ -20,6 +20,7 @@ import {
   BarChart3,
   Plus,
   UserPlus,
+  MapPin,
 } from 'lucide-react';
 
 interface NavItem {
@@ -60,6 +61,7 @@ const navItems: NavItem[] = [
       { id: 'dispatch-delivery-new', labelAr: 'إضافة مندوب جديد', path: '/dispatch/delivery/new', icon: UserPlus },
       { id: 'dispatch-tracking', labelAr: 'التتبع المباشر', path: '/dispatch/tracking', icon: Navigation },
       { id: 'dispatch-custody', labelAr: 'العهد والخزينة', path: '/dispatch/custody', icon: Scale },
+      { id: 'dispatch-delivery-zones', labelAr: 'مناطق وزونات التوصيل', path: '/dispatch/delivery-zones', icon: MapPin },
     ],
   },
   { id: 'menu', labelAr: 'المنيو والأصناف', labelEn: 'Menu & Modifiers', icon: UtensilsCrossed, path: '/menu', active: true },

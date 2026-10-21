@@ -5,7 +5,7 @@ import type { Rider } from '@/types';
 import {
   Wallet, Package, UtensilsCrossed, Bike, Banknote, AlertCircle,
   CheckCircle2, Clock, Receipt, X, ChevronLeft,
-  TrendingUp, Scale,
+  TrendingUp, Scale, MapPin,
 } from 'lucide-react';
 import { formatCurrency } from '@/utils/helpers';
 import PageHeader from '@/components/shared/PageHeader';
@@ -91,6 +91,10 @@ export default function DispatchCustody() {
           <Wallet className="w-4 h-4" />
           العهد والخزينة
         </span>
+        <Link to="/dispatch/delivery-zones" className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium text-navy-300 hover:text-white transition-all">
+          <MapPin className="w-4 h-4" />
+          مناطق وزونات التوصيل
+        </Link>
       </div>
 
       {/* KPI Cards */}

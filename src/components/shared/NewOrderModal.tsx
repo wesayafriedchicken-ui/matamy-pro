@@ -1,11 +1,12 @@
 import { useState, useMemo } from 'react';
 import { useApp } from '@/context/AppContext';
-import type { Order, DeliveryType, OrderItem, OrderChannel } from '@/types';
+import type { Order, DeliveryType, OrderItem, OrderChannel, OfficialDeliveryZone } from '@/types';
 import {
   X, Plus, Minus, Utensils, ShoppingBag, Bike, CreditCard,
-  Wallet, Banknote, Search, Check,
+  Wallet, Banknote, Search, Check, MapPin, Clock,
 } from 'lucide-react';
 import { formatCurrency } from '@/utils/helpers';
+import { defaultDeliveryZones } from '@/data/deliveryZonesData';
 
 interface NewOrderModalProps {
   onClose: () => void;
@@ -24,6 +25,28 @@ export default function NewOrderModal({ onClose, onCreated }: NewOrderModalProps
   const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'online'>('cash');
   const [channel] = useState<OrderChannel>('pos');
+
+  // Delivery zones from storage or defaults
+  const deliveryZones: OfficialDeliveryZone[] = useMemo(() => {
+    try {
+      const saved = localStorage.getItem('nine_fries_delivery_zones_v1');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed.filter((z: OfficialDeliveryZone) => z.isActive !== false);
+        }
+      }
+    } catch {
+      // fallback
+    }
+    return defaultDeliveryZones;
+  }, []);
+
+  const [selectedZoneId, setSelectedZoneId] = useState<string>('zone-01');
+
+  const selectedZone = useMemo(() => {
+    return deliveryZones.find((z) => z.id === selectedZoneId) || deliveryZones[0];
+  }, [deliveryZones, selectedZoneId]);
 
   const filteredMenu = menuItems.filter(
     (m) => m.available && (m.nameAr.includes(search) || m.name.toLowerCase().includes(search.toLowerCase())),
@@ -56,7 +79,7 @@ export default function NewOrderModal({ onClose, onCreated }: NewOrderModalProps
 
   const subtotal = cartItems.reduce((s, i) => s + i.price * i.quantity, 0);
   const tax = Math.round(subtotal * 0.14);
-  const deliveryFee = deliveryType === 'delivery' ? 10 : 0;
+  const deliveryFee = deliveryType === 'delivery' ? (selectedZone ? selectedZone.deliveryFee : 30) : 0;
   const total = subtotal + tax + deliveryFee;
 
   const addToCart = (menuItemId: string) => {
@@ -129,6 +152,11 @@ export default function NewOrderModal({ onClose, onCreated }: NewOrderModalProps
       channel,
       tableNumber: deliveryType === 'dine_in' ? tableNumber : undefined,
       address: deliveryType === 'delivery' ? address : undefined,
+      deliveryZoneId: deliveryType === 'delivery' ? selectedZone?.id : undefined,
+      deliveryZoneCode: deliveryType === 'delivery' ? selectedZone?.zoneCode : undefined,
+      deliveryZoneAr: deliveryType === 'delivery' ? selectedZone?.areaNameAr : undefined,
+      deliveryEstimatedTime: deliveryType === 'delivery' ? selectedZone?.deliveryTimeAr : undefined,
+      deliveryDistanceKm: deliveryType === 'delivery' ? selectedZone?.distanceKm : undefined,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       paymentMethod,
@@ -195,10 +223,65 @@ export default function NewOrderModal({ onClose, onCreated }: NewOrderModalProps
 
               {/* Customer Info for delivery */}
               {deliveryType === 'delivery' && (
-                <div className="grid grid-cols-2 gap-3 mb-4">
-                  <input type="text" placeholder="اسم العميل" value={customerName} onChange={(e) => setCustomerName(e.target.value)} className="input-field" />
-                  <input type="text" placeholder="رقم الهاتف" value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} className="input-field" />
-                  <input type="text" placeholder="عنوان التوصيل" value={address} onChange={(e) => setAddress(e.target.value)} className="input-field col-span-2" />
+                <div className="space-y-3 mb-4">
+                  <div className="grid grid-cols-2 gap-3">
+                    <input type="text" placeholder="اسم العميل *" value={customerName} onChange={(e) => setCustomerName(e.target.value)} className="input-field text-xs" />
+                    <input type="text" placeholder="رقم الهاتف *" value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} className="input-field text-xs" />
+                  </div>
+
+                  {/* Zone Selector */}
+                  <div className="p-3 bg-navy-900/80 border border-brand-500/30 rounded-xl space-y-2">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-bold text-white flex items-center gap-1.5">
+                        <MapPin className="w-3.5 h-3.5 text-brand-400" />
+                        منطقة / زون التوصيل *
+                      </span>
+                      {selectedZone && (
+                        <span className="text-[11px] text-amber-300 font-semibold flex items-center gap-1">
+                          <Clock className="w-3 h-3 text-amber-400" />
+                          {selectedZone.deliveryTimeAr}
+                        </span>
+                      )}
+                    </div>
+
+                    <select
+                      value={selectedZoneId}
+                      onChange={(e) => {
+                        const newId = e.target.value;
+                        setSelectedZoneId(newId);
+                        const zone = deliveryZones.find((z) => z.id === newId);
+                        if (zone && (!address || address.trim() === '')) {
+                          setAddress(zone.areaNameAr);
+                        }
+                      }}
+                      className="input-field text-xs bg-navy-950 text-white cursor-pointer"
+                    >
+                      {deliveryZones.map((z) => (
+                        <option key={z.id} value={z.id} className="bg-navy-900">
+                          زون {z.zoneCode}: {z.areaNameAr} — {z.deliveryFee} ج.م ({z.distanceKm} كم)
+                        </option>
+                      ))}
+                    </select>
+
+                    {selectedZone && (
+                      <div className="flex items-center justify-between bg-navy-950/70 p-2 rounded-lg text-xs">
+                        <span className="text-navy-300">
+                          المسافة: <strong className="text-white font-mono">{selectedZone.distanceKm} كم</strong>
+                        </span>
+                        <span className="text-amber-400 font-bold font-mono">
+                          رسوم التوصيل: {selectedZone.deliveryFee} ج.م
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  <input
+                    type="text"
+                    placeholder="عنوان التوصيل بالتفصيل (الشارع، المبنى، الشقة) *"
+                    value={address}
+                    onChange={(e) => setAddress(e.target.value)}
+                    className="input-field text-xs w-full"
+                  />
                 </div>
               )}
 
@@ -359,10 +442,24 @@ export default function NewOrderModal({ onClose, onCreated }: NewOrderModalProps
                   <span>الضريبة (14%)</span>
                   <span className="font-mono">{formatCurrency(tax)}</span>
                 </div>
-                {deliveryFee > 0 && (
-                  <div className="flex justify-between text-navy-300 text-sm">
-                    <span>رسوم التوصيل</span>
-                    <span className="font-mono">{formatCurrency(deliveryFee)}</span>
+                {deliveryType === 'delivery' && (
+                  <div className="space-y-1 pt-1 border-t border-navy-800">
+                    <div className="flex justify-between text-navy-300 text-sm">
+                      <span className="flex items-center gap-1">
+                        <MapPin className="w-3.5 h-3.5 text-brand-400" />
+                        رسوم التوصيل {selectedZone ? `(زون ${selectedZone.zoneCode})` : ''}
+                      </span>
+                      <span className="font-mono text-amber-400 font-bold">{formatCurrency(deliveryFee)}</span>
+                    </div>
+                    {selectedZone && (
+                      <div className="flex justify-between text-[11px] text-navy-400">
+                        <span>{selectedZone.areaNameAr} ({selectedZone.distanceKm} كم)</span>
+                        <span className="text-amber-300 flex items-center gap-1">
+                          <Clock className="w-3 h-3 text-amber-400" />
+                          {selectedZone.deliveryTimeAr}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 )}
                 <div className="border-t border-navy-700/40 pt-2 flex justify-between text-white font-bold">

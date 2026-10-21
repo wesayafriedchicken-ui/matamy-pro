@@ -20,6 +20,7 @@ import {
   Store,
   BookOpen,
   Sparkles,
+  MapPin,
 } from 'lucide-react';
 
 interface SearchResultItem {
@@ -168,6 +169,16 @@ export default function GlobalSearchModal({
         badge: 'مالية',
         link: '/dispatch/custody',
         icon: DollarSign,
+      },
+      {
+        id: 'page-dispatch-delivery-zones',
+        category: 'page',
+        categoryLabelAr: 'زونات التوصيل',
+        title: 'مناطق وزونات التوصيل والأسعار (Delivery Zones)',
+        subtitle: 'جدول أسعار التوصيل المعتمد، المسافات، وأوقات التوصيل لـ 22 زون',
+        badge: 'زونات',
+        link: '/dispatch/delivery-zones',
+        icon: MapPin,
       },
       {
         id: 'page-menu',

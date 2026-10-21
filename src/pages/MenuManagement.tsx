@@ -12,7 +12,6 @@ import {
   Edit3,
   ChefHat,
   Clock,
-  Image as ImageIcon,
   Grid3x3,
   List,
   Globe,
@@ -23,7 +22,12 @@ import {
   Trash2,
   ToggleRight,
   ToggleLeft,
+  RotateCcw,
+  Eye,
+  Sparkles,
+  Tv,
 } from 'lucide-react';
+import MenuBoardView from '@/components/menu/MenuBoardView';
 import {
   calculateFoodCost,
   calculateProfitMargin,
@@ -32,18 +36,27 @@ import {
 import PageHeader from '@/components/shared/PageHeader';
 
 export default function MenuManagement() {
-  const { menuItems, inventory, updateMenuItem, addMenuItem } = useApp();
+  const { menuItems, inventory, updateMenuItem, addMenuItem, deleteMenuItem, deleteAllMenuItems, resetToDefaultMenu } = useApp();
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [viewMode, setViewMode] = useState<'grid' | 'list' | 'board'>('grid');
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [showDeleteAllConfirm, setShowDeleteAllConfirm] = useState(false);
+  const [showMenuBoardModal, setShowMenuBoardModal] = useState(false);
+  const [deleteItemTarget, setDeleteItemTarget] = useState<MenuItem | null>(null);
 
   const categories = ['all', ...Array.from(new Set(menuItems.map((m) => m.categoryAr)))];
 
   const filtered = menuItems.filter((m) => {
+    const q = search.trim().toLowerCase();
     const matchesSearch =
-      m.nameAr.includes(search) || m.name.toLowerCase().includes(search.toLowerCase());
+      !q ||
+      m.nameAr.toLowerCase().includes(q) ||
+      m.name.toLowerCase().includes(q) ||
+      (m.descriptionAr && m.descriptionAr.toLowerCase().includes(q)) ||
+      (m.barcode && m.barcode.includes(q));
     const matchesCategory = selectedCategory === 'all' || m.categoryAr === selectedCategory;
     return matchesSearch && matchesCategory;
   });
@@ -58,24 +71,120 @@ export default function MenuManagement() {
     setEditingItem(null);
   };
 
+  const handleConfirmDelete = () => {
+    if (deleteItemTarget) {
+      deleteMenuItem(deleteItemTarget.id);
+      setDeleteItemTarget(null);
+    }
+  };
+
+  const handleConfirmReset = async () => {
+    await resetToDefaultMenu();
+    setShowResetConfirm(false);
+    setSelectedCategory('all');
+    setSearch('');
+  };
+
+  const handleConfirmDeleteAll = async () => {
+    await deleteAllMenuItems();
+    setShowDeleteAllConfirm(false);
+    setSelectedCategory('all');
+    setSearch('');
+  };
+
   return (
     <div className="animate-fade-in">
       <PageHeader
-        title="المنيو والأصناف"
-        description="إدارة الأصناف، الأسعار، خيارات التخصيص، والقنوات الرقمية"
+        title="المنيو والأصناف (Nine Fries)"
+        description="إدارة قائمة أسعار ناين فرايز الرسمية، خيارات التخصيص، تكلفة المكونات، وتتبع الوجبات"
         actions={
-          <button
-            onClick={() => {
-              setEditingItem(null);
-              setShowForm(true);
-            }}
-            className="btn-primary flex items-center gap-2"
-          >
-            <Plus className="w-5 h-5" />
-            إضافة / تعديل صنف
-          </button>
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              onClick={() => setShowMenuBoardModal(true)}
+              className="btn-ghost flex items-center gap-2 border border-brand-500/40 hover:bg-brand-500/10 text-brand-300 hover:text-white px-3.5 py-2 text-xs font-semibold rounded-xl"
+              title="عرض صورة المنيو 4K الرسمية لناين فرايز"
+            >
+              <Eye className="w-4 h-4 text-brand-400" />
+              <span>صورة المنيو 4K الأصلية</span>
+            </button>
+            <button
+              onClick={() => setShowDeleteAllConfirm(true)}
+              className="btn-ghost flex items-center gap-2 border border-danger-500/30 hover:border-danger-500 hover:bg-danger-500/10 text-danger-300 hover:text-danger-200 px-3.5 py-2 text-xs font-semibold rounded-xl"
+              title="مسح كافة الأصناف الموجودة في المنيو حالياً"
+            >
+              <Trash2 className="w-4 h-4 text-danger-400" />
+              <span>مسح كل الأصناف</span>
+            </button>
+            <button
+              onClick={() => setShowResetConfirm(true)}
+              className="btn-ghost flex items-center gap-2 border border-navy-700 hover:border-brand-500/40 text-navy-200 hover:text-white px-3.5 py-2 text-xs font-semibold rounded-xl"
+              title="تطبيق الـ 37 صنف المعتمدة من قائمة ناين فرايز المرفقة"
+            >
+              <RotateCcw className="w-4 h-4 text-brand-400" />
+              <span>تطبيق منيو ناين فرايز (37 صنف)</span>
+            </button>
+            <button
+              onClick={() => {
+                setEditingItem(null);
+                setShowForm(true);
+              }}
+              className="btn-primary flex items-center gap-2 text-xs font-bold px-4 py-2 rounded-xl"
+            >
+              <Plus className="w-4 h-4" />
+              <span>إضافة صنف جديد</span>
+            </button>
+          </div>
         }
       />
+
+      {/* KPI Stats Strip */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <div className="glass-card p-4 border border-navy-700/60 flex items-center justify-between">
+          <div>
+            <p className="text-navy-400 text-xs mb-1">إجمالي أصناف المنيو</p>
+            <p className="text-2xl font-bold font-mono text-white">{menuItems.length} <span className="text-xs font-normal text-navy-400">صنف</span></p>
+          </div>
+          <div className="w-10 h-10 rounded-xl bg-brand-500/15 flex items-center justify-center text-brand-400">
+            <UtensilsCrossed className="w-5 h-5" />
+          </div>
+        </div>
+
+        <div className="glass-card p-4 border border-navy-700/60 flex items-center justify-between">
+          <div>
+            <p className="text-navy-400 text-xs mb-1">أصناف لودد فرايز وسندوتشات</p>
+            <p className="text-2xl font-bold font-mono text-amber-300">
+              {menuItems.filter((m) => m.categoryAr === 'لودد فرايز' || m.categoryAr === 'سندوتشات').length}
+            </p>
+          </div>
+          <div className="w-10 h-10 rounded-xl bg-amber-500/15 flex items-center justify-center text-amber-400">
+            <Sparkles className="w-5 h-5" />
+          </div>
+        </div>
+
+        <div className="glass-card p-4 border border-navy-700/60 flex items-center justify-between">
+          <div>
+            <p className="text-navy-400 text-xs mb-1">الصوصات والإضافات</p>
+            <p className="text-2xl font-bold font-mono text-emerald-300">
+              {menuItems.filter((m) => m.categoryAr === 'صوصات' || m.categoryAr === 'إضافات').length}
+            </p>
+          </div>
+          <div className="w-10 h-10 rounded-xl bg-emerald-500/15 flex items-center justify-center text-emerald-400">
+            <Package className="w-5 h-5" />
+          </div>
+        </div>
+
+        <div className="glass-card p-4 border border-navy-700/60 flex items-center justify-between">
+          <div>
+            <p className="text-navy-400 text-xs mb-1">متوسط سعر الصنف</p>
+            <p className="text-2xl font-bold font-mono text-white">
+              {Math.round(menuItems.reduce((acc, m) => acc + m.price, 0) / (menuItems.length || 1))} <span className="text-xs text-navy-400 font-normal">ج.م</span>
+            </p>
+          </div>
+          <div className="w-10 h-10 rounded-xl bg-blue-500/15 flex items-center justify-center text-blue-400">
+            <DollarSign className="w-5 h-5" />
+          </div>
+        </div>
+      </div>
 
       {/* Filters + View Toggle */}
       <div className="flex items-center gap-3 mb-6 flex-wrap">
@@ -83,104 +192,155 @@ export default function MenuManagement() {
           <Search className="w-4 h-4 text-navy-400 absolute right-3 top-1/2 -translate-y-1/2" />
           <input
             type="text"
-            placeholder="بحث عن صنف..."
+            placeholder="بحث عن صنف أو مكون أو باركود..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="input-field pr-10"
+            className="input-field pr-10 text-xs"
           />
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          {categories.map((cat) => (
-            <button
-              key={cat}
-              onClick={() => setSelectedCategory(cat)}
-              className={`px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${
-                selectedCategory === cat
-                  ? 'bg-brand-500 text-white'
-                  : 'bg-navy-800/60 text-navy-300 hover:bg-navy-700'
-              }`}
-            >
-              {cat === 'all' ? 'الكل' : cat}
-            </button>
-          ))}
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-thin">
+          {categories.map((cat) => {
+            const count = cat === 'all' ? menuItems.length : menuItems.filter((m) => m.categoryAr === cat).length;
+            const isSelected = selectedCategory === cat;
+            return (
+              <button
+                key={cat}
+                onClick={() => setSelectedCategory(cat)}
+                className={`whitespace-nowrap px-3.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all duration-200 ${
+                  isSelected
+                    ? 'bg-brand-500 text-white shadow-md shadow-brand-500/20'
+                    : 'bg-navy-800/80 text-navy-300 hover:bg-navy-700 hover:text-white border border-navy-700/50'
+                }`}
+              >
+                <span>{cat === 'all' ? 'جميع الأصناف' : cat}</span>
+                <span
+                  className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono ${
+                    isSelected ? 'bg-white/20 text-white' : 'bg-navy-900/60 text-navy-400'
+                  }`}
+                >
+                  {count}
+                </span>
+              </button>
+            );
+          })}
         </div>
-        <div className="flex items-center gap-1 bg-navy-800/60 rounded-xl p-1">
+        <div className="flex items-center gap-1 bg-navy-800/60 rounded-xl p-1 border border-navy-700/60 shadow-inner">
           <button
             onClick={() => setViewMode('grid')}
-            className={`w-9 h-9 rounded-lg flex items-center justify-center transition-all ${
-              viewMode === 'grid' ? 'bg-brand-500 text-white' : 'text-navy-400 hover:text-white'
+            className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${
+              viewMode === 'grid' ? 'bg-brand-500 text-white shadow-md shadow-brand-500/20' : 'text-navy-400 hover:text-white'
             }`}
+            title="عرض البطاقات (Grid View)"
           >
             <Grid3x3 className="w-4 h-4" />
           </button>
           <button
             onClick={() => setViewMode('list')}
-            className={`w-9 h-9 rounded-lg flex items-center justify-center transition-all ${
-              viewMode === 'list' ? 'bg-brand-500 text-white' : 'text-navy-400 hover:text-white'
+            className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${
+              viewMode === 'list' ? 'bg-brand-500 text-white shadow-md shadow-brand-500/20' : 'text-navy-400 hover:text-white'
             }`}
+            title="عرض الجدول (List View)"
           >
             <List className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => setViewMode('board')}
+            className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${
+              viewMode === 'board' ? 'bg-brand-500 text-white shadow-md shadow-brand-500/20' : 'text-navy-400 hover:text-white'
+            }`}
+            title="عرض لوحة المنيو الرسمية (Digital Menu Board)"
+          >
+            <Tv className="w-4 h-4" />
           </button>
         </div>
       </div>
 
       {/* Menu Items */}
-      {viewMode === 'grid' ? (
+      {viewMode === 'board' ? (
+        <MenuBoardView
+          menuItems={menuItems}
+          onEditItem={(item) => {
+            setEditingItem(item);
+            setShowForm(true);
+          }}
+          onDeleteItem={(item) => setDeleteItemTarget(item)}
+        />
+      ) : viewMode === 'grid' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {filtered.map((item) => (
-            <MenuCard key={item.id} item={item} onEdit={() => { setEditingItem(item); setShowForm(true); }} />
+            <MenuCard
+              key={item.id}
+              item={item}
+              onEdit={() => { setEditingItem(item); setShowForm(true); }}
+              onDelete={() => setDeleteItemTarget(item)}
+            />
           ))}
         </div>
       ) : (
-        <div className="glass-card overflow-hidden">
+        <div className="glass-card overflow-hidden shadow-2xl border border-navy-700/60">
           <div className="overflow-x-auto">
-            <table className="w-full">
+            <table className="w-full text-xs">
               <thead>
-                <tr className="border-b border-navy-700/50">
-                  <th className="text-right text-navy-400 text-xs font-medium px-5 py-3">الصنف</th>
-                  <th className="text-right text-navy-400 text-xs font-medium px-5 py-3">التصنيف</th>
-                  <th className="text-right text-navy-400 text-xs font-medium px-5 py-3">السعر</th>
-                  <th className="text-right text-navy-400 text-xs font-medium px-5 py-3">تكلفة المكونات</th>
-                  <th className="text-right text-navy-400 text-xs font-medium px-5 py-3">Food Cost %</th>
-                  <th className="text-right text-navy-400 text-xs font-medium px-5 py-3">هامش الربح</th>
-                  <th className="text-right text-navy-400 text-xs font-medium px-5 py-3">القنوات</th>
-                  <th className="text-right text-navy-400 text-xs font-medium px-5 py-3">التوفر</th>
-                  <th className="text-center text-navy-400 text-xs font-medium px-5 py-3">إجراء</th>
+                <tr className="border-b border-navy-700/50 bg-navy-900/40">
+                  <th className="text-right text-navy-400 font-semibold px-5 py-3.5">الصنف</th>
+                  <th className="text-right text-navy-400 font-semibold px-5 py-3.5">التصنيف</th>
+                  <th className="text-right text-navy-400 font-semibold px-5 py-3.5">السعر</th>
+                  <th className="text-right text-navy-400 font-semibold px-5 py-3.5">تكلفة المكونات</th>
+                  <th className="text-right text-navy-400 font-semibold px-5 py-3.5">Food Cost %</th>
+                  <th className="text-right text-navy-400 font-semibold px-5 py-3.5">هامش الربح</th>
+                  <th className="text-right text-navy-400 font-semibold px-5 py-3.5">القنوات</th>
+                  <th className="text-right text-navy-400 font-semibold px-5 py-3.5">التوفر</th>
+                  <th className="text-center text-navy-400 font-semibold px-5 py-3.5">إجراءات</th>
                 </tr>
               </thead>
               <tbody>
                 {filtered.map((item) => {
                   const foodCost = calculateFoodCost(item.recipe);
-                  const _profit = calculateProfit(item.price, foodCost);
                   const margin = calculateProfitMargin(item.price, foodCost);
-                  const fcPct = Math.round((foodCost / item.price) * 100);
+                  const fcPct = item.price > 0 ? Math.round((foodCost / item.price) * 100) : 0;
                   return (
                     <tr key={item.id} className="border-b border-navy-800/40 hover:bg-navy-800/30 transition-colors">
                       <td className="px-5 py-3.5">
                         <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-xl bg-navy-700/50 flex items-center justify-center">
-                            <ImageIcon className="w-5 h-5 text-navy-500" />
+                          <div className="w-10 h-10 rounded-xl bg-navy-800 flex items-center justify-center text-brand-400 shrink-0 font-bold border border-navy-700/60">
+                            <UtensilsCrossed className="w-4 h-4" />
                           </div>
                           <div>
-                            <p className="text-white text-sm font-medium">{item.nameAr}</p>
-                            <p className="text-navy-400 text-xs">{item.barcode}</p>
+                            <p className="text-white text-sm font-semibold">{item.nameAr}</p>
+                            <p className="text-navy-400 text-[11px] line-clamp-1">{item.descriptionAr || item.name}</p>
                           </div>
                         </div>
                       </td>
-                      <td className="px-5 py-3.5"><span className="text-navy-200 text-sm">{item.categoryAr}</span></td>
-                      <td className="px-5 py-3.5"><span className="text-white text-sm font-bold font-mono">{item.price} ج</span></td>
-                      <td className="px-5 py-3.5"><span className="text-warning-400 text-sm font-mono">{Math.round(foodCost * 10) / 10} ج</span></td>
                       <td className="px-5 py-3.5">
-                        <span className={`text-sm font-bold ${fcPct < 35 ? 'text-success-400' : fcPct < 50 ? 'text-warning-400' : 'text-danger-400'}`}>{fcPct}%</span>
+                        <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold bg-navy-800 text-navy-200 border border-navy-700/60">
+                          {item.categoryAr}
+                        </span>
                       </td>
                       <td className="px-5 py-3.5">
-                        <span className={`text-sm font-bold ${margin > 60 ? 'text-success-400' : margin > 40 ? 'text-warning-400' : 'text-danger-400'}`}>{margin}%</span>
+                        <span className="text-white text-sm font-bold font-mono">
+                          {item.price === 0 ? 'مجاني' : `${item.price} ج`}
+                        </span>
                       </td>
                       <td className="px-5 py-3.5">
-                        <div className="flex items-center gap-1">
-                          {item.digitalChannels.includes('website_app') && <Globe className="w-3.5 h-3.5 text-blue-400" />}
-                          {item.digitalChannels.includes('dine_in_only') && <Store className="w-3.5 h-3.5 text-success-400" />}
-                          {item.digitalChannels.includes('delivery_only') && <Bike className="w-3.5 h-3.5 text-brand-400" />}
+                        <span className="text-warning-400 text-sm font-mono font-bold">
+                          {Math.round(foodCost * 10) / 10} ج
+                        </span>
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <span className={`text-xs font-bold font-mono ${fcPct < 35 ? 'text-success-400' : fcPct < 50 ? 'text-warning-400' : 'text-danger-400'}`}>
+                          {fcPct}%
+                        </span>
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <span className={`text-xs font-bold font-mono ${margin > 60 ? 'text-success-400' : margin > 40 ? 'text-warning-400' : 'text-danger-400'}`}>
+                          {margin}%
+                        </span>
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <div className="flex items-center gap-1.5">
+                          {item.digitalChannels.includes('website_app') && <Globe className="w-3.5 h-3.5 text-blue-400" title="ويب وتطبيق" />}
+                          {item.digitalChannels.includes('dine_in_only') && <Store className="w-3.5 h-3.5 text-success-400" title="داخل الصالة" />}
+                          {item.digitalChannels.includes('delivery_only') && <Bike className="w-3.5 h-3.5 text-brand-400" title="توصيل" />}
                         </div>
                       </td>
                       <td className="px-5 py-3.5">
@@ -192,12 +352,20 @@ export default function MenuManagement() {
                         </span>
                       </td>
                       <td className="px-5 py-3.5">
-                        <div className="flex items-center justify-center">
+                        <div className="flex items-center justify-center gap-1.5">
                           <button
                             onClick={() => { setEditingItem(item); setShowForm(true); }}
-                            className="w-8 h-8 rounded-lg bg-navy-700/50 hover:bg-navy-700 flex items-center justify-center text-navy-300 hover:text-white transition-all"
+                            className="w-8 h-8 rounded-lg bg-navy-700/50 hover:bg-brand-500/20 hover:text-brand-400 flex items-center justify-center text-navy-300 hover:text-white transition-all"
+                            title="تعديل الصنف والمكونات"
                           >
                             <Edit3 className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => setDeleteItemTarget(item)}
+                            className="w-8 h-8 rounded-lg bg-danger-500/10 hover:bg-danger-500/20 text-danger-400 flex items-center justify-center transition-all"
+                            title="حذف الصنف من المنيو"
+                          >
+                            <Trash2 className="w-4 h-4" />
                           </button>
                         </div>
                       </td>
@@ -210,6 +378,208 @@ export default function MenuManagement() {
         </div>
       )}
 
+      {menuItems.length === 0 ? (
+        <div className="py-16 text-center glass-card border border-navy-700/60 rounded-2xl mt-4 max-w-2xl mx-auto space-y-4 p-8">
+          <div className="w-16 h-16 rounded-2xl bg-danger-500/10 flex items-center justify-center text-danger-400 mx-auto">
+            <Trash2 className="w-8 h-8" />
+          </div>
+          <div>
+            <h4 className="text-white font-bold text-lg mb-1">المنيو فارغ حالياً</h4>
+            <p className="text-navy-300 text-xs leading-relaxed">
+              تم مسح جميع الأصناف. يمكنك الآن استيراد وتطبيق الأصناف الـ 37 المعتمدة من قائمة ناين فرايز الرسمية (المرفقة بالصورة 4K) بنقرة واحدة، أو البدء بإضافة أصناف جديدة.
+            </p>
+          </div>
+          <div className="flex items-center justify-center gap-3 pt-2 flex-wrap">
+            <button
+              onClick={handleConfirmReset}
+              className="btn-primary flex items-center gap-2 text-xs font-bold px-5 py-2.5 rounded-xl shadow-lg shadow-brand-500/20"
+            >
+              <RotateCcw className="w-4 h-4" />
+              <span>تحميل منيو ناين فرايز (37 صنف من الصورة)</span>
+            </button>
+            <button
+              onClick={() => { setEditingItem(null); setShowForm(true); }}
+              className="btn-ghost flex items-center gap-2 text-xs font-semibold px-4 py-2.5 rounded-xl border border-navy-700"
+            >
+              <Plus className="w-4 h-4" />
+              <span>إضافة صنف يدوي</span>
+            </button>
+          </div>
+        </div>
+      ) : viewMode !== 'board' && filtered.length === 0 ? (
+        <div className="py-16 text-center glass-card border border-navy-700/60 rounded-2xl mt-4">
+          <UtensilsCrossed className="w-12 h-12 text-navy-600 mx-auto mb-3" />
+          <h4 className="text-white font-bold text-base mb-1">لا توجد أصناف مطابقة للبحث</h4>
+          <p className="text-navy-400 text-xs mb-4">جرب البحث بكلمات أخرى أو اختر تصنيفاً مختلفاً</p>
+          <button
+            onClick={() => { setSearch(''); setSelectedCategory('all'); }}
+            className="btn-ghost text-xs font-semibold px-4 py-2"
+          >
+            إعادة ضبط الفلاتر
+          </button>
+        </div>
+      ) : null}
+
+      {/* ===================== ORIGINAL 4K MENU BOARD MODAL ===================== */}
+      {showMenuBoardModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fade-in"
+          onClick={() => setShowMenuBoardModal(false)}
+        >
+          <div
+            className="glass-card w-full max-w-6xl max-h-[92vh] overflow-hidden flex flex-col border border-navy-700/80 shadow-2xl animate-scale-in"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-4 border-b border-navy-700/70 flex items-center justify-between bg-navy-900/60">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-brand-500/20 text-brand-400 flex items-center justify-center">
+                  <Eye className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-white font-bold text-base">لوحة منيو ناين فرايز الرسمية المعتمدة (4K)</h3>
+                  <p className="text-navy-400 text-xs">مطابقة تماماً للأصناف والأسعار في النظام الحالي</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowMenuBoardModal(false)}
+                className="w-8 h-8 rounded-lg bg-navy-800 text-navy-400 hover:text-white flex items-center justify-center transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="overflow-auto p-3 flex items-center justify-center bg-black/50">
+              <img
+                src="/assets/aistudio/4k_menu_Nine_Fries_b7129251.png"
+                alt="Nine Fries 4K Official Menu"
+                className="max-w-full h-auto rounded-xl shadow-2xl object-contain border border-navy-800"
+              />
+            </div>
+            <div className="p-3 bg-navy-950/80 border-t border-navy-800 text-xs text-navy-300 flex justify-between items-center">
+              <span>جميع الأصناف الـ 37 تم استيرادها وتكوين وصفاتها وأسعارها بالكامل</span>
+              <button
+                onClick={() => setShowMenuBoardModal(false)}
+                className="btn-primary text-xs py-1.5 px-4 font-bold"
+              >
+                إغلاق
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===================== RESET CONFIRM MODAL ===================== */}
+      {showResetConfirm && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-fade-in"
+          onClick={() => setShowResetConfirm(false)}
+        >
+          <div
+            className="glass-card w-full max-w-md p-6 animate-scale-in border border-navy-700/80 shadow-2xl space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="w-12 h-12 rounded-2xl bg-brand-500/15 flex items-center justify-center text-brand-400 mx-auto">
+              <RotateCcw className="w-6 h-6" />
+            </div>
+            <div className="text-center space-y-2">
+              <h3 className="text-white font-bold text-lg">استعادة منيو ناين فرايز الرسمي (37 صنف)؟</h3>
+              <p className="text-navy-300 text-xs leading-relaxed">
+                سيتم مسح أي تعديلات سابقة وإعادة ضبط المنيو بالكامل طبقاً لصورة منيو ناين فرايز الرسمية المرفقة (لودد فرايز، فرايز تري، ماك آند تشيز، سندوتشات، وجبات، صوصات، إضافات، ومشروبات).
+              </p>
+            </div>
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={handleConfirmReset}
+                className="btn-primary flex-1 py-2.5 text-xs font-bold"
+              >
+                تأكيد الاستعادة
+              </button>
+              <button
+                onClick={() => setShowResetConfirm(false)}
+                className="btn-ghost flex-1 py-2.5 text-xs"
+              >
+                إلغاء
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===================== DELETE ALL CONFIRM MODAL ===================== */}
+      {showDeleteAllConfirm && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-fade-in"
+          onClick={() => setShowDeleteAllConfirm(false)}
+        >
+          <div
+            className="glass-card w-full max-w-md p-6 animate-scale-in border border-danger-500/50 shadow-2xl space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="w-12 h-12 rounded-2xl bg-danger-500/15 flex items-center justify-center text-danger-400 mx-auto">
+              <Trash2 className="w-6 h-6" />
+            </div>
+            <div className="text-center space-y-2">
+              <h3 className="text-white font-bold text-lg">مسح كافة أصناف المنيو؟</h3>
+              <p className="text-navy-300 text-xs leading-relaxed">
+                هل أنت متأكد من مسح جميع الأصناف ({menuItems.length} صنف)؟ سيتم تفريغ المنيو بالكامل من النظام ومن قاعدة البيانات. يمكنك في أي وقت إعادة تحميل أصناف ناين فرايز الـ 37 بضغطة زر.
+              </p>
+            </div>
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={handleConfirmDeleteAll}
+                className="btn-danger flex-1 py-2.5 text-xs font-bold bg-danger-600 hover:bg-danger-500 text-white rounded-xl shadow-lg shadow-danger-600/30"
+              >
+                تأكيد مسح كافة الأصناف
+              </button>
+              <button
+                onClick={() => setShowDeleteAllConfirm(false)}
+                className="btn-ghost flex-1 py-2.5 text-xs"
+              >
+                إلغاء
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===================== DELETE CONFIRM MODAL ===================== */}
+      {deleteItemTarget && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-fade-in"
+          onClick={() => setDeleteItemTarget(null)}
+        >
+          <div
+            className="glass-card w-full max-w-md p-6 animate-scale-in border border-danger-500/40 shadow-2xl space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="w-12 h-12 rounded-2xl bg-danger-500/15 flex items-center justify-center text-danger-400 mx-auto">
+              <Trash2 className="w-6 h-6" />
+            </div>
+            <div className="text-center space-y-2">
+              <h3 className="text-white font-bold text-lg">حذف صنف من المنيو؟</h3>
+              <p className="text-white font-semibold text-sm">{deleteItemTarget.nameAr}</p>
+              <p className="text-navy-300 text-xs leading-relaxed">
+                هل أنت متأكد من حذف هذا الصنف من المنيو؟ لن يظهر بعد ذلك في نقاط البيع (POS) أو الطلبات الجديدة.
+              </p>
+            </div>
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={handleConfirmDelete}
+                className="btn-danger flex-1 py-2.5 text-xs font-bold bg-danger-500 hover:bg-danger-600 text-white rounded-xl"
+              >
+                تأكيد الحذف
+              </button>
+              <button
+                onClick={() => setDeleteItemTarget(null)}
+                className="btn-ghost flex-1 py-2.5 text-xs"
+              >
+                إلغاء
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===================== MENU ITEM FORM MODAL ===================== */}
       {showForm && (
         <MenuItemForm
           item={editingItem}
@@ -227,24 +597,32 @@ export default function MenuManagement() {
 
 /* ===================== Menu Card (Grid View) ===================== */
 
-function MenuCard({ item, onEdit }: { item: MenuItem; onEdit: () => void }) {
+function MenuCard({
+  item,
+  onEdit,
+  onDelete,
+}: {
+  item: MenuItem;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
   const foodCost = calculateFoodCost(item.recipe);
   const profit = calculateProfit(item.price, foodCost);
   const margin = calculateProfitMargin(item.price, foodCost);
-  const fcPct = Math.round((foodCost / item.price) * 100);
+  const fcPct = item.price > 0 ? Math.round((foodCost / item.price) * 100) : 0;
 
   return (
-    <div className="glass-card overflow-hidden hover:scale-[1.02] transition-transform duration-200">
-      <div className="h-32 bg-gradient-to-br from-navy-700/50 to-navy-800/50 flex items-center justify-center relative">
-        <div className="w-16 h-16 rounded-2xl bg-navy-700/60 flex items-center justify-center">
-          <ImageIcon className="w-8 h-8 text-navy-500" />
+    <div className="glass-card overflow-hidden hover:scale-[1.01] transition-transform duration-200 border border-navy-700/60 hover:border-brand-500/40">
+      <div className="h-32 bg-gradient-to-br from-navy-800 to-navy-900 flex items-center justify-center relative border-b border-navy-800">
+        <div className="w-16 h-16 rounded-2xl bg-brand-500/10 border border-brand-500/20 flex items-center justify-center text-brand-400">
+          <UtensilsCrossed className="w-8 h-8" />
         </div>
         {!item.available && (
           <div className="absolute top-3 right-3 bg-danger-500/20 text-danger-400 text-xs px-2.5 py-1 rounded-lg border border-danger-500/30">
             غير متاح بالمطبخ
           </div>
         )}
-        <div className="absolute top-3 left-3 bg-navy-900/80 backdrop-blur-sm text-navy-200 text-xs px-2.5 py-1 rounded-lg">
+        <div className="absolute top-3 left-3 bg-navy-900/90 backdrop-blur-sm text-navy-200 text-xs font-semibold px-2.5 py-1 rounded-lg border border-navy-700/60">
           {item.categoryAr}
         </div>
         <div className="absolute bottom-3 left-3 flex items-center gap-1">
@@ -271,11 +649,24 @@ function MenuCard({ item, onEdit }: { item: MenuItem; onEdit: () => void }) {
             <h4 className="text-white font-bold text-base">{item.nameAr}</h4>
             <p className="text-navy-400 text-xs mt-0.5">{item.name}</p>
           </div>
-          <button onClick={onEdit} className="w-8 h-8 rounded-lg bg-navy-700/50 hover:bg-navy-700 flex items-center justify-center text-navy-300 hover:text-white transition-all">
-            <Edit3 className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={onEdit}
+              className="w-8 h-8 rounded-lg bg-navy-700/50 hover:bg-brand-500/20 hover:text-brand-400 flex items-center justify-center text-navy-300 hover:text-white transition-all"
+              title="تعديل الصنف والمكونات"
+            >
+              <Edit3 className="w-4 h-4" />
+            </button>
+            <button
+              onClick={onDelete}
+              className="w-8 h-8 rounded-lg bg-danger-500/10 hover:bg-danger-500/20 text-danger-400 flex items-center justify-center transition-all"
+              title="حذف الصنف من المنيو"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          </div>
         </div>
-        <p className="text-navy-300 text-xs mb-4 line-clamp-2">{item.descriptionAr}</p>
+        <p className="text-navy-300 text-xs mb-4 line-clamp-2 leading-relaxed">{item.descriptionAr}</p>
 
         <div className="grid grid-cols-3 gap-2 mb-4">
           <div className="bg-navy-900/50 rounded-xl px-3 py-2 text-center border border-navy-700/40">

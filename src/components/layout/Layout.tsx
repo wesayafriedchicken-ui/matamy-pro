@@ -14,6 +14,7 @@ const pageMeta: Record<string, { title: string; subtitle: string }> = {
   '/dispatch/delivery/new': { title: 'إضافة مندوب جديد (Create Rider)', subtitle: 'تسجيل وتكوين بيانات المندوب والمركبة والعهد' },
   '/dispatch/tracking': { title: 'التتبع المباشر', subtitle: 'تتبع المناديب على الخريطة' },
   '/dispatch/custody': { title: 'العهد والخزينة', subtitle: 'تسوية العهد النقدية للمناديب' },
+  '/dispatch/delivery-zones': { title: 'مناطق وزونات التوصيل (Delivery Zones)', subtitle: 'جدول تسعير الدليفري المعتمد، المسافات، ونطاقات التغطية' },
   '/menu': { title: 'المنيو والأصناف', subtitle: 'إدارة الأصناف والأسعار والتخصيصات' },
   '/inventory': { title: 'المخزون والوصفات', subtitle: 'إدارة المواد الخام والمخزون والجرد' },
   '/inventory/recipes': { title: 'تركيب الوجبات والوصفات', subtitle: 'ربط الأصناف بالمخزون وحساب التكلفة' },
@@ -34,10 +35,14 @@ export default function Layout() {
     location.pathname.startsWith('/orders/') && location.pathname !== '/orders/new';
   const isRiderEdit =
     location.pathname.startsWith('/dispatch/delivery/') && location.pathname !== '/dispatch/delivery/new';
+  const isInventoryDetail =
+    location.pathname.startsWith('/inventory/') && location.pathname !== '/inventory/recipes';
   const meta = isOrderDetail
     ? { title: 'تفاصيل الطلب', subtitle: 'متابعة وتتبع الطلب' }
     : isRiderEdit
     ? { title: 'تعديل بيانات المندوب', subtitle: 'تحديث بيانات وملف المندوب' }
+    : isInventoryDetail
+    ? { title: 'تفاصيل وتعديل مادة خام', subtitle: 'إدارة وتعديل بيانات المادة الخام وسجل الحركات' }
     : pageMeta[location.pathname] ?? { title: 'لوحة التحكم', subtitle: '' };
 
   return (

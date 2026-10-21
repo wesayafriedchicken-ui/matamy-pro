@@ -36,6 +36,11 @@ export interface Order {
   channel: OrderChannel;
   tableNumber?: string;
   address?: string;
+  deliveryZoneId?: string;
+  deliveryZoneCode?: string;
+  deliveryZoneAr?: string;
+  deliveryEstimatedTime?: string;
+  deliveryDistanceKm?: string;
   riderId?: string;
   riderName?: string;
   createdAt: string;
@@ -97,7 +102,20 @@ export interface InventoryItem {
   sku: string;
   name: string;
   nameAr: string;
-  unit: 'kg' | 'pcs' | 'liters' | 'grams';
+
+  // وحدة الشراء والتخزين بالمخزن (Purchase / Storage Unit)
+  purchaseUnit?: string;
+  purchaseUnitAr?: string;
+  costPerPurchaseUnit?: number;
+
+  // وحدة الاستهلاك والوصفات (Recipe / Base Unit)
+  recipeUnit?: string;
+  recipeUnitAr?: string;
+  conversionFactor?: number; // كم وحدة استهلاك داخل وحدة الشراء
+  costPerRecipeUnit?: number; // تكلفة وحدة الاستهلاك (تحسب تلقائياً)
+
+  // التوافق العام مع أجزاء النظام
+  unit: string;
   unitAr: string;
   costPerUnit: number;
   currentStock: number;
@@ -107,6 +125,26 @@ export interface InventoryItem {
   lastRestocked: string;
   category: string;
   categoryAr: string;
+  packageDetails?: string;
+}
+
+export interface InventoryLogDiff {
+  field: string;
+  fieldAr: string;
+  oldVal: string | number;
+  newVal: string | number;
+}
+
+export interface InventoryLog {
+  id: string;
+  inventoryId: string;
+  timestamp: string;
+  actorName: string;
+  actorRole: string;
+  actionType: 'update' | 'adjust' | 'restock' | 'price_change' | 'create' | 'note';
+  title: string;
+  details: string;
+  diff?: InventoryLogDiff[];
 }
 
 export interface Rider {
@@ -195,3 +233,17 @@ export interface AppNotification {
   link?: string;
 }
 
+export interface OfficialDeliveryZone {
+  id: string;
+  zoneCode: string; // '01', '02', etc.
+  zoneNumber: number; // 1, 2, etc.
+  areaNameAr: string; // e.g. 'شارع 9 - محيط الفرع'
+  areaNameEn: string;
+  deliveryFee: number; // in EGP
+  deliveryTimeAr: string; // 'غير محدد'
+  distanceKm: string; // e.g. '0 - 1'
+  distanceMinKm: number;
+  distanceMaxKm: number;
+  isActive: boolean;
+  notes?: string;
+}

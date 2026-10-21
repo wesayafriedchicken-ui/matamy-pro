@@ -475,8 +475,10 @@ export default function OrderDetail() {
               </div>
               {order.deliveryFee > 0 && (
                 <div className="flex justify-between text-navy-300 text-sm">
-                  <span>رسوم التوصيل</span>
-                  <span className="font-mono">{formatCurrency(order.deliveryFee)}</span>
+                  <span>
+                    رسوم التوصيل {order.deliveryZoneCode ? `(زون ${order.deliveryZoneCode}${order.deliveryZoneAr ? ` - ${order.deliveryZoneAr}` : ''})` : ''}
+                  </span>
+                  <span className="font-mono text-amber-400 font-bold">{formatCurrency(order.deliveryFee)}</span>
                 </div>
               )}
               <div className="border-t border-navy-700/40 pt-2 flex justify-between text-white font-bold">
