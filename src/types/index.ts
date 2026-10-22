@@ -247,3 +247,60 @@ export interface OfficialDeliveryZone {
   isActive: boolean;
   notes?: string;
 }
+
+// ==========================================
+// Users & Roles Permissions
+// ==========================================
+export type PermissionModule =
+  | 'dashboard'
+  | 'orders'
+  | 'kds'
+  | 'dispatch'
+  | 'menu'
+  | 'inventory'
+  | 'digital_store'
+  | 'financials'
+  | 'shifts'
+  | 'users_roles';
+
+export interface PermissionDefinition {
+  id: string;
+  code: string;
+  nameAr: string;
+  nameEn: string;
+  module: PermissionModule;
+  descriptionAr: string;
+}
+
+export interface Role {
+  id: string;
+  name: string;
+  nameAr: string;
+  description: string;
+  descriptionAr: string;
+  permissions: string[]; // List of permission codes
+  isSystem?: boolean;
+  color?: 'brand' | 'blue' | 'purple' | 'success' | 'warning' | 'danger';
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export type UserStatus = 'active' | 'suspended' | 'inactive';
+
+export interface AppUser {
+  id: string;
+  username: string;
+  name: string;
+  nameAr: string;
+  email: string;
+  phone: string;
+  roleId: string;
+  status: UserStatus;
+  avatar?: string;
+  password?: string;
+  pin?: string;
+  lastLogin?: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+

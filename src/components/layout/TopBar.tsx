@@ -11,6 +11,11 @@ import {
   Bike,
   BookOpen,
   Layers,
+  LogOut,
+  ShieldCheck,
+  ChevronDown,
+  Check,
+  User,
 } from 'lucide-react';
 import { useApp } from '@/context/AppContext';
 import NotificationsDropdown from './NotificationsDropdown';
@@ -35,12 +40,30 @@ export default function TopBar({ title, subtitle }: TopBarProps) {
     riders,
     isSearchOpen,
     setIsSearchOpen,
+    currentUser,
+    roles,
+    users,
+    logout,
+    setCurrentUser,
   } = useApp();
 
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [topBarQuery, setTopBarQuery] = useState('');
   const [isQuickDropdownOpen, setIsQuickDropdownOpen] = useState(false);
   const searchContainerRef = useRef<HTMLDivElement>(null);
+  const userMenuRef = useRef<HTMLDivElement>(null);
+
+  // Close user menu on outside click
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
+        setIsUserMenuOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // Global Ctrl+K / Cmd+K listener
   useEffect(() => {
@@ -317,15 +340,141 @@ export default function TopBar({ title, subtitle }: TopBarProps) {
             />
           </div>
 
-          {/* User Profile */}
-          <div className="flex items-center gap-3 pr-3 border-r border-navy-800/60 mr-1">
-            <div className="text-left hidden sm:block">
-              <p className="text-white text-xs font-semibold">عمر يوسف</p>
-              <p className="text-navy-400 text-[11px]">مدير الفرع</p>
-            </div>
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-500 to-brand-600 flex items-center justify-center text-white font-bold text-xs shadow-lg shadow-brand-500/20">
-              ع
-            </div>
+          {/* User Profile & Menu */}
+          <div ref={userMenuRef} className="relative pr-3 border-r border-navy-800/60 mr-1">
+            <button
+              type="button"
+              onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+              className="flex items-center gap-2.5 p-1 rounded-xl hover:bg-navy-800/60 transition-colors group text-right"
+              title="قائمة الحساب والصلاحيات"
+            >
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-500 to-brand-600 flex items-center justify-center text-white font-bold text-xs shadow-lg shadow-brand-500/20 shrink-0 overflow-hidden ring-1 ring-brand-500/30">
+                {currentUser?.avatar ? (
+                  <img src={currentUser.avatar} alt={currentUser.nameAr} className="w-full h-full object-cover" />
+                ) : (
+                  <span>{currentUser?.nameAr?.charAt(0) || 'م'}</span>
+                )}
+              </div>
+              <div className="text-right hidden sm:block">
+                <div className="flex items-center gap-1.5">
+                  <p className="text-white text-xs font-semibold group-hover:text-brand-400 transition-colors">
+                    {currentUser?.nameAr || 'مستخدم النظام'}
+                  </p>
+                  <ChevronDown className="w-3.5 h-3.5 text-navy-400 group-hover:text-white transition-transform" />
+                </div>
+                <p className="text-brand-400 text-[10px] font-medium">
+                  {roles.find((r) => r.id === currentUser?.roleId)?.nameAr || 'عضو بالفريق'}
+                </p>
+              </div>
+            </button>
+
+            {/* Interactive User Dropdown Menu */}
+            {isUserMenuOpen && (
+              <div className="absolute top-12 left-0 w-72 bg-navy-900 border border-navy-700/80 rounded-2xl shadow-2xl p-3 z-50 animate-scale-in text-right">
+                {/* User Info Header */}
+                <div className="p-3 rounded-xl bg-navy-800/60 border border-navy-700/50 mb-2">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-500 to-brand-600 flex items-center justify-center text-white font-bold text-sm shadow-md overflow-hidden shrink-0">
+                      {currentUser?.avatar ? (
+                        <img src={currentUser.avatar} alt={currentUser.nameAr} className="w-full h-full object-cover" />
+                      ) : (
+                        <span>{currentUser?.nameAr?.charAt(0) || 'م'}</span>
+                      )}
+                    </div>
+                    <div className="overflow-hidden">
+                      <p className="text-white font-bold text-sm truncate">{currentUser?.nameAr || 'مستخدم النظام'}</p>
+                      <p className="text-navy-400 text-xs truncate">@{currentUser?.username || 'user'}</p>
+                    </div>
+                  </div>
+                  <div className="mt-2.5 pt-2 border-t border-navy-700/50 flex items-center justify-between text-[11px]">
+                    <span className="text-navy-400">الدور التشغيلي:</span>
+                    <span className="px-2 py-0.5 rounded-md bg-brand-500/15 text-brand-400 font-semibold border border-brand-500/20">
+                      {roles.find((r) => r.id === currentUser?.roleId)?.nameAr || 'غير محدد'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Quick Navigation Links */}
+                <div className="space-y-1 py-1 border-b border-navy-800/80">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsUserMenuOpen(false);
+                      navigate('/users');
+                    }}
+                    className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs text-navy-200 hover:text-white hover:bg-navy-800/80 transition-colors"
+                  >
+                    <div className="flex items-center gap-2">
+                      <User className="w-4 h-4 text-brand-400" />
+                      <span>إدارة المستخدمين والحسابات</span>
+                    </div>
+                    <span className="text-[10px] text-navy-400 font-mono">{users.length}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsUserMenuOpen(false);
+                      navigate('/users/roles');
+                    }}
+                    className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs text-navy-200 hover:text-white hover:bg-navy-800/80 transition-colors"
+                  >
+                    <div className="flex items-center gap-2">
+                      <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                      <span>الأدوار ومصفوفة الصلاحيات</span>
+                    </div>
+                    <span className="text-[10px] text-navy-400 font-mono">{roles.length}</span>
+                  </button>
+                </div>
+
+                {/* Quick Profile Switcher (Helpful for test and demo) */}
+                <div className="py-2 border-b border-navy-800/80">
+                  <p className="text-[10px] text-navy-400 font-semibold px-2 mb-1.5">تبديل الحساب السريع لاختبار الصلاحيات:</p>
+                  <div className="space-y-1 max-h-48 overflow-y-auto no-scrollbar">
+                    {users
+                      .filter((u) => u.status === 'active')
+                      .map((u) => {
+                        const isCurrent = currentUser?.id === u.id;
+                        const roleObj = roles.find((r) => r.id === u.roleId);
+                        return (
+                          <button
+                            key={u.id}
+                            type="button"
+                            onClick={() => {
+                              setCurrentUser(u);
+                              setIsUserMenuOpen(false);
+                            }}
+                            className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs transition-colors cursor-pointer ${
+                              isCurrent
+                                ? 'bg-brand-500/20 text-brand-400 font-bold border border-brand-500/30'
+                                : 'text-navy-300 hover:bg-navy-800/60 hover:text-white'
+                            }`}
+                          >
+                            <span className="truncate">{u.nameAr} ({roleObj?.nameAr.split(' ')[0] || 'عضو'})</span>
+                            {isCurrent && <Check className="w-3.5 h-3.5 text-brand-400 shrink-0" />}
+                          </button>
+                        );
+                      })}
+                  </div>
+                </div>
+
+                {/* Logout Action */}
+                <div className="pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsUserMenuOpen(false);
+                      logout();
+                      navigate('/login');
+                    }}
+                    className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs text-danger-400 hover:text-white hover:bg-danger-500/20 border border-danger-500/20 transition-all font-semibold"
+                  >
+                    <LogOut className="w-3.5 h-3.5" />
+                    <span>تسجيل الخروج من النظام</span>
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </header>

@@ -7,6 +7,7 @@ interface StatCardProps {
   value: string;
   change?: number;
   color: 'brand' | 'success' | 'warning' | 'danger' | 'blue' | 'purple';
+  sublabel?: string;
 }
 
 const colorMap = {
@@ -18,7 +19,7 @@ const colorMap = {
   purple: { bg: 'bg-purple-500/10', text: 'text-purple-400', ring: 'ring-purple-500/20' },
 };
 
-export default function StatCard({ icon: Icon, label, value, change, color }: StatCardProps) {
+export default function StatCard({ icon: Icon, label, value, change, color, sublabel }: StatCardProps) {
   const c = colorMap[color];
   const positive = (change ?? 0) >= 0;
 
@@ -37,6 +38,7 @@ export default function StatCard({ icon: Icon, label, value, change, color }: St
       </div>
       <p className="text-navy-400 text-sm mt-4">{label}</p>
       <p className="text-white font-bold text-2xl mt-1">{value}</p>
+      {sublabel && <p className="text-navy-400 text-xs mt-1.5">{sublabel}</p>}
     </div>
   );
 }

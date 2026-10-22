@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabase';
-import type { Order, MenuItem, InventoryItem, Rider, KdsTicket, Shift, Transaction } from '@/types';
+import type { Order, MenuItem, InventoryItem, Rider, KdsTicket, Shift, Transaction, Role, AppUser, UserStatus } from '@/types';
 
 type DbRow = Record<string, unknown>;
 
@@ -410,3 +410,126 @@ export async function dbFetchTransactions(): Promise<Transaction[] | null> {
     method: row.method as Transaction['method'],
   }));
 }
+
+// ==========================================
+// Roles & Permissions
+// ==========================================
+export async function dbFetchRoles(): Promise<Role[] | null> {
+  const { data, error } = await supabase.from('roles').select('*').order('created_at', { ascending: true });
+  if (error) {
+    console.warn('[Supabase] Failed to fetch roles:', error.message);
+    return null;
+  }
+  return (data || []).map((row: DbRow) => ({
+    id: String(row.id),
+    name: String(row.name),
+    nameAr: String(row.name_ar),
+    description: String(row.description || ''),
+    descriptionAr: String(row.description_ar || ''),
+    permissions: (row.permissions as string[]) || [],
+    isSystem: Boolean(row.is_system),
+    color: (row.color as Role['color']) || 'brand',
+    createdAt: String(row.created_at || new Date().toISOString()),
+    updatedAt: row.updated_at ? String(row.updated_at) : undefined,
+  }));
+}
+
+export async function dbUpsertRole(role: Role): Promise<boolean> {
+  const { error } = await supabase.from('roles').upsert({
+    id: role.id,
+    name: role.name,
+    name_ar: role.nameAr,
+    description: role.description,
+    description_ar: role.descriptionAr,
+    permissions: role.permissions,
+    is_system: role.isSystem ?? false,
+    color: role.color || 'brand',
+    updated_at: new Date().toISOString(),
+  });
+  if (error) {
+    console.warn('[Supabase] Failed to upsert role:', error.message);
+    return false;
+  }
+  return true;
+}
+
+export async function dbDeleteRole(id: string): Promise<boolean> {
+  const { error } = await supabase.from('roles').delete().eq('id', id);
+  if (error) {
+    console.warn('[Supabase] Failed to delete role:', error.message);
+    return false;
+  }
+  return true;
+}
+
+// ==========================================
+// System Users (Accounts)
+// ==========================================
+export async function dbFetchUsers(): Promise<AppUser[] | null> {
+  const { data, error } = await supabase.from('app_users').select('*').order('created_at', { ascending: true });
+  if (error) {
+    console.warn('[Supabase] Failed to fetch users:', error.message);
+    return null;
+  }
+  return (data || []).map((row: DbRow) => ({
+    id: String(row.id),
+    username: String(row.username),
+    name: String(row.name),
+    nameAr: String(row.name_ar),
+    email: String(row.email),
+    phone: String(row.phone || ''),
+    roleId: String(row.role_id),
+    status: row.status as UserStatus,
+    avatar: row.avatar ? String(row.avatar) : undefined,
+    password: row.password ? String(row.password) : undefined,
+    pin: row.pin ? String(row.pin) : undefined,
+    lastLogin: row.last_login ? String(row.last_login) : undefined,
+    createdAt: String(row.created_at || new Date().toISOString()),
+    updatedAt: row.updated_at ? String(row.updated_at) : undefined,
+  }));
+}
+
+export async function dbUpsertUser(user: AppUser): Promise<boolean> {
+  const { error } = await supabase.from('app_users').upsert({
+    id: user.id,
+    username: user.username,
+    name: user.name,
+    name_ar: user.nameAr,
+    email: user.email,
+    phone: user.phone,
+    role_id: user.roleId,
+    status: user.status,
+    avatar: user.avatar || null,
+    password: user.password || null,
+    pin: user.pin || null,
+    last_login: user.lastLogin || null,
+    updated_at: new Date().toISOString(),
+  });
+  if (error) {
+    console.warn('[Supabase] Failed to upsert user:', error.message);
+    return false;
+  }
+  return true;
+}
+
+export async function dbDeleteUser(id: string): Promise<boolean> {
+  const { error } = await supabase.from('app_users').delete().eq('id', id);
+  if (error) {
+    console.warn('[Supabase] Failed to delete user:', error.message);
+    return false;
+  }
+  return true;
+}
+
+export async function dbToggleUserStatus(id: string, status: UserStatus): Promise<boolean> {
+  const { error } = await supabase
+    .from('app_users')
+    .update({ status, updated_at: new Date().toISOString() })
+    .eq('id', id);
+  if (error) {
+    console.warn('[Supabase] Failed to update user status:', error.message);
+    return false;
+  }
+  return true;
+}
+

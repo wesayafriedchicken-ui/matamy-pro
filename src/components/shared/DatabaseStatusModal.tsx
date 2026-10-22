@@ -9,24 +9,31 @@ import {
   RefreshCw,
   X,
   Layers,
-  ShieldCheck,
   Zap,
 } from 'lucide-react';
 import { useApp } from '@/context/AppContext';
 import { SUPABASE_PROJECT_ID, SUPABASE_SQL_EDITOR_URL } from '@/lib/supabase';
-import { SUPABASE_SQL_SCHEMA } from '@/data/supabaseSchema';
+import { SUPABASE_SQL_SCHEMA, ROLES_AND_USERS_SQL } from '@/data/supabaseSchema';
 
 export default function DatabaseStatusModal() {
   const { dbStatus, dbError, isDbModalOpen, setIsDbModalOpen, checkConnection, showToast } = useApp();
   const [copied, setCopied] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [selectedSqlTab, setSelectedSqlTab] = useState<'roles_users' | 'full'>('roles_users');
 
   if (!isDbModalOpen) return null;
 
+  const currentSql = selectedSqlTab === 'roles_users' ? ROLES_AND_USERS_SQL : SUPABASE_SQL_SCHEMA;
+
   const handleCopySql = () => {
-    navigator.clipboard.writeText(SUPABASE_SQL_SCHEMA);
+    navigator.clipboard.writeText(currentSql);
     setCopied(true);
-    showToast('تم نسخ كود SQL بنجاح إلى الحافظة', 'success');
+    showToast(
+      selectedSqlTab === 'roles_users'
+        ? 'تم نسخ كود SQL لإنشاء جدولي roles و app_users'
+        : 'تم نسخ كود SQL لجميع الجداول',
+      'success'
+    );
     setTimeout(() => setCopied(false), 2500);
   };
 
@@ -143,17 +150,40 @@ export default function DatabaseStatusModal() {
             </ol>
           </div>
 
-          {/* SQL Preview Box */}
+          {/* SQL Preview Box with Tabs */}
           <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-navy-300 flex items-center gap-1.5">
-                <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                كود إنشاء الجداول والصلاحيات (PostgreSQL DDL & Seed):
-              </span>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              {/* Tab Selector */}
+              <div className="flex items-center gap-1.5 p-1 bg-navy-950/80 border border-navy-800 rounded-xl">
+                <button
+                  type="button"
+                  onClick={() => setSelectedSqlTab('roles_users')}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                    selectedSqlTab === 'roles_users'
+                      ? 'bg-brand-500 text-white shadow-sm'
+                      : 'text-navy-400 hover:text-white hover:bg-navy-800/50'
+                  }`}
+                >
+                  الأدوار والمستخدمين (roles & app_users)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedSqlTab('full')}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                    selectedSqlTab === 'full'
+                      ? 'bg-brand-500 text-white shadow-sm'
+                      : 'text-navy-400 hover:text-white hover:bg-navy-800/50'
+                  }`}
+                >
+                  كافة جداول المنظومة (Full Schema)
+                </button>
+              </div>
+
+              {/* Action Buttons */}
               <div className="flex items-center gap-2">
                 <button
                   onClick={handleCopySql}
-                  className="px-3 py-1.5 rounded-lg bg-brand-500 hover:bg-brand-600 text-white text-xs font-semibold flex items-center gap-1.5 transition-all shadow-md shadow-brand-500/20 active:scale-95"
+                  className="px-3 py-1.5 rounded-lg bg-brand-500 hover:bg-brand-600 text-white text-xs font-semibold flex items-center gap-1.5 transition-all shadow-md shadow-brand-500/20 active:scale-95 cursor-pointer"
                 >
                   <Copy className="w-3.5 h-3.5" />
                   {copied ? 'تم النسخ!' : 'نسخ كود SQL'}
@@ -172,7 +202,7 @@ export default function DatabaseStatusModal() {
 
             <div className="relative">
               <pre className="h-44 overflow-y-auto bg-navy-950/90 border border-navy-800 rounded-xl p-3 font-mono text-[11px] text-emerald-400/90 dir-ltr text-left selection:bg-brand-500 selection:text-white">
-                {SUPABASE_SQL_SCHEMA}
+                {currentSql}
               </pre>
             </div>
           </div>

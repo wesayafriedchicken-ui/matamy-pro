@@ -112,6 +112,36 @@ CREATE TABLE IF NOT EXISTS public.transactions (
     method TEXT NOT NULL DEFAULT 'cash'
 );
 
+CREATE TABLE IF NOT EXISTS public.roles (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    name_ar TEXT NOT NULL,
+    description TEXT,
+    description_ar TEXT,
+    permissions JSONB DEFAULT '[]'::jsonb,
+    is_system BOOLEAN NOT NULL DEFAULT FALSE,
+    color TEXT NOT NULL DEFAULT 'brand',
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.app_users (
+    id TEXT PRIMARY KEY,
+    username TEXT UNIQUE NOT NULL,
+    name TEXT NOT NULL,
+    name_ar TEXT NOT NULL,
+    email TEXT NOT NULL,
+    phone TEXT,
+    role_id TEXT NOT NULL REFERENCES public.roles(id) ON DELETE RESTRICT,
+    status TEXT NOT NULL DEFAULT 'active',
+    avatar TEXT,
+    password TEXT,
+    pin TEXT,
+    last_login TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- 2. Enable Row Level Security (RLS)
 ALTER TABLE public.orders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.menu_items ENABLE ROW LEVEL SECURITY;
@@ -120,6 +150,8 @@ ALTER TABLE public.riders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.kds_tickets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.shifts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.transactions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.roles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.app_users ENABLE ROW LEVEL SECURITY;
 
 -- 3. Drop existing policies if any and re-create public access policies
 DO $$
@@ -131,6 +163,8 @@ BEGIN
     DROP POLICY IF EXISTS "Public access on kds_tickets" ON public.kds_tickets;
     DROP POLICY IF EXISTS "Public access on shifts" ON public.shifts;
     DROP POLICY IF EXISTS "Public access on transactions" ON public.transactions;
+    DROP POLICY IF EXISTS "Public access on roles" ON public.roles;
+    DROP POLICY IF EXISTS "Public access on app_users" ON public.app_users;
 END $$;
 
 CREATE POLICY "Public access on orders" ON public.orders FOR ALL USING (true) WITH CHECK (true);
@@ -140,6 +174,8 @@ CREATE POLICY "Public access on riders" ON public.riders FOR ALL USING (true) WI
 CREATE POLICY "Public access on kds_tickets" ON public.kds_tickets FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Public access on shifts" ON public.shifts FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Public access on transactions" ON public.transactions FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Public access on roles" ON public.roles FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Public access on app_users" ON public.app_users FOR ALL USING (true) WITH CHECK (true);
 
 -- 4. Enable Realtime Publications for live sync
 DO $$
@@ -151,6 +187,8 @@ BEGIN
     ALTER PUBLICATION supabase_realtime ADD TABLE public.kds_tickets;
     ALTER PUBLICATION supabase_realtime ADD TABLE public.shifts;
     ALTER PUBLICATION supabase_realtime ADD TABLE public.transactions;
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.roles;
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.app_users;
 EXCEPTION WHEN OTHERS THEN
     NULL;
 END $$;
@@ -210,4 +248,23 @@ VALUES
   ('tx-1', 'income', 'sales', 'مبيعات طلبات', 2670, 'POS & Online Orders Batch #1', 'مبيعات الكاشير والطلبات الإلكترونية', NOW() - INTERVAL '2 hours', 'cash'),
   ('tx-2', 'expense', 'inventory', 'مشتريات مخزون', 850, 'Fresh Poultry Batch Restock', 'شراء دفعة دواجن طازجة', NOW() - INTERVAL '4 hours', 'online'),
   ('tx-3', 'income', 'sales', 'مبيعات طلبات', 1890, 'POS Lunch Rush Sales', 'مبيعات طلبات الغداء', NOW() - INTERVAL '1 hour', 'card')
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO public.roles (id, name, name_ar, description, description_ar, permissions, is_system, color)
+VALUES
+  ('role-admin', 'Super Admin', 'مدير النظام (Super Admin)', 'Full unrestricted access', 'صلاحيات كاملة وغير مقيدة على كافة أقسام النظام والتشغيل والماليات والمستخدمين', '["*"]'::jsonb, true, 'brand'),
+  ('role-branch-manager', 'Branch Manager', 'مدير الفرع', 'Operational management', 'إدارة العمليات اليومية للفرع، الطلبات، الكاشير، المناديب، المخزون، والورديات', '["dashboard.view","orders.view","orders.create","orders.edit","kds.view","kds.manage","dispatch.view","dispatch.assign","dispatch.custody","menu.manage","inventory.view","inventory.manage","digital_store.manage","financials.view","financials.manage","shifts.manage"]'::jsonb, true, 'purple'),
+  ('role-cashier', 'Cashier & POS', 'كاشير ومسؤول مبيعات', 'POS orders & billing', 'تسجيل طلبات العملاء الصالة والتيك أواي، استلام المدفوعات، وإدارة درج الكاشير', '["dashboard.view","orders.view","orders.create","orders.edit","financials.manage"]'::jsonb, true, 'blue'),
+  ('role-kitchen-chef', 'Kitchen Chef', 'رئيس الطهاة والشيف', 'Kitchen ticket management', 'متابعة شاشة المطبخ KDS وتذاكر الطهي الحية، فحص وصفات ومكونات الأصناف', '["kds.view","kds.manage","inventory.view"]'::jsonb, true, 'warning'),
+  ('role-dispatcher', 'Delivery Supervisor', 'مشرف التوصيل والمناديب', 'Fleet and dispatching', 'توزيع الطلبات على المناديب، تتبع خطوط السير، ومتابعة عهدة السائقين النقدية', '["orders.view","dispatch.view","dispatch.assign","dispatch.custody"]'::jsonb, true, 'success'),
+  ('role-inventory-keeper', 'Inventory Specialist', 'أمين المخزن والمشتريات', 'Stock and raw materials', 'متابعة أرصدة المواد الخام بالمخزن، جرد الأصناف، وتسجيل أذون الوارد والصرف', '["inventory.view","inventory.manage"]'::jsonb, true, 'brand')
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO public.app_users (id, username, name, name_ar, email, phone, role_id, status, avatar, password, pin)
+VALUES
+  ('usr-1', 'admin', 'Omar Youssef', 'عمر يوسف', 'admin@matamy.com', '01001234567', 'role-admin', 'active', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150', '123', '1234'),
+  ('usr-2', 'sara.cashier', 'Sara Ahmed', 'سارة أحمد', 'sara@matamy.com', '01112223344', 'role-cashier', 'active', 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150', '123', '2233'),
+  ('usr-3', 'chef.mahmoud', 'Mahmoud Saeed', 'محمود سعيد', 'chef@matamy.com', '01234567890', 'role-kitchen-chef', 'active', 'https://images.unsplash.com/photo-1583394838336-acd977736f90?w=150', '123', '3344'),
+  ('usr-4', 'hani.dispatch', 'Hani Kamal', 'هاني كمال', 'dispatch@matamy.com', '01099887766', 'role-dispatcher', 'active', 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150', '123', '4455'),
+  ('usr-5', 'marwan.stock', 'Marwan Tarek', 'مروان طارق', 'marwan@matamy.com', '01556677889', 'role-inventory-keeper', 'suspended', 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150', '123', '5566')
 ON CONFLICT (id) DO NOTHING;

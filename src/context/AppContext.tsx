@@ -6,7 +6,7 @@ import {
   useEffect,
   type ReactNode,
 } from 'react';
-import type { Order, MenuItem, InventoryItem, Rider, KdsTicket, Shift, Transaction, AppNotification } from '@/types';
+import type { Order, MenuItem, InventoryItem, Rider, KdsTicket, Shift, Transaction, AppNotification, Role, AppUser, UserStatus } from '@/types';
 import {
   mockOrders,
   mockMenuItems,
@@ -16,6 +16,7 @@ import {
   mockShifts,
   mockTransactions,
 } from '@/data/mockData';
+import { defaultRoles, defaultUsers } from '@/data/rolesPermissionsData';
 import { supabase, checkSupabaseConnection } from '@/lib/supabase';
 import {
   dbFetchOrders,
@@ -39,6 +40,13 @@ import {
   dbAdvanceKdsTicket,
   dbFetchShifts,
   dbFetchTransactions,
+  dbFetchRoles,
+  dbUpsertRole,
+  dbDeleteRole,
+  dbFetchUsers,
+  dbUpsertUser,
+  dbDeleteUser,
+  dbToggleUserStatus,
 } from '@/services/databaseService';
 
 export interface Toast {
@@ -47,7 +55,7 @@ export interface Toast {
   type: 'success' | 'info' | 'warning';
 }
 
-export type DbStatus = 'checking' | 'connected' | 'pending_tables' | 'error';
+export type DbStatus = 'checking' | 'connected' | 'pending_tables' | 'pending_roles_tables' | 'error';
 
 interface AppContextValue {
   orders: Order[];
@@ -60,6 +68,8 @@ interface AppContextValue {
   toasts: Toast[];
   dbStatus: DbStatus;
   dbError?: string;
+  rolesTableExists: boolean;
+  usersTableExists: boolean;
   isDbModalOpen: boolean;
   setIsDbModalOpen: (open: boolean) => void;
   checkConnection: () => Promise<void>;
@@ -103,6 +113,24 @@ interface AppContextValue {
   addNotification: (notif: Omit<AppNotification, 'id' | 'timestamp' | 'read'>) => void;
   isSearchOpen: boolean;
   setIsSearchOpen: (open: boolean) => void;
+  // Auth & Session
+  currentUser: AppUser | null;
+  setCurrentUser: (user: AppUser | null) => void;
+  login: (usernameOrEmail: string, password?: string) => Promise<{ success: boolean; error?: string }>;
+  logout: () => void;
+  // Roles Management
+  roles: Role[];
+  addRole: (role: Role) => Promise<boolean>;
+  updateRole: (role: Role) => Promise<boolean>;
+  deleteRole: (id: string) => Promise<boolean>;
+  getRoleById: (id: string) => Role | undefined;
+  // Users Management
+  users: AppUser[];
+  addUser: (user: AppUser) => Promise<boolean>;
+  updateUser: (user: AppUser) => Promise<boolean>;
+  deleteUser: (id: string) => Promise<boolean>;
+  toggleUserStatus: (id: string, status: UserStatus) => Promise<boolean>;
+  hasPermission: (permissionCode: string) => boolean;
 }
 
 export interface InventoryCategoryOption {
@@ -218,7 +246,59 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [dbStatus, setDbStatus] = useState<DbStatus>('checking');
   const [dbError, setDbError] = useState<string | undefined>();
+  const [rolesTableExists, setRolesTableExists] = useState(false);
+  const [usersTableExists, setUsersTableExists] = useState(false);
   const [isDbModalOpen, setIsDbModalOpen] = useState(false);
+
+  // Roles & Permissions State
+  const [roles, setRoles] = useState<Role[]>(() => {
+    try {
+      const saved = localStorage.getItem('app_roles');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {
+      console.warn('Failed to parse roles:', e);
+    }
+    return defaultRoles;
+  });
+
+  // App Users State
+  const [users, setUsers] = useState<AppUser[]>(() => {
+    try {
+      const saved = localStorage.getItem('app_users');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {
+      console.warn('Failed to parse users:', e);
+    }
+    return defaultUsers;
+  });
+
+  // Current Logged-in User Session State
+  const [currentUser, setCurrentUserState] = useState<AppUser | null>(() => {
+    try {
+      const saved = localStorage.getItem('app_current_user');
+      if (saved) {
+        return JSON.parse(saved);
+      }
+    } catch (e) {
+      console.warn('Failed to parse current user:', e);
+    }
+    return defaultUsers[0] || null;
+  });
+
+  const setCurrentUser = useCallback((user: AppUser | null) => {
+    setCurrentUserState(user);
+    if (user) {
+      localStorage.setItem('app_current_user', JSON.stringify(user));
+    } else {
+      localStorage.removeItem('app_current_user');
+    }
+  }, []);
 
   // Inventory Custom Categories and Units State
   const [inventoryCategories, setInventoryCategories] = useState<InventoryCategoryOption[]>(() => {
@@ -373,7 +453,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Check database and load data if tables exist
   const loadDataFromDb = useCallback(async () => {
     try {
-      const [dbOrders, dbMenu, dbInv, dbRiders, dbTickets, dbShiftsList, dbTxs] = await Promise.all([
+      const [dbOrders, dbMenu, dbInv, dbRiders, dbTickets, dbShiftsList, dbTxs, dbRolesList, dbUsersList] = await Promise.all([
         dbFetchOrders(),
         dbFetchMenuItems(),
         dbFetchInventory(),
@@ -381,6 +461,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         dbFetchKdsTickets(),
         dbFetchShifts(),
         dbFetchTransactions(),
+        dbFetchRoles(),
+        dbFetchUsers(),
       ]);
 
       if (dbOrders && dbOrders.length > 0) setOrders(dbOrders);
@@ -390,6 +472,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (dbTickets && dbTickets.length > 0) setKdsTickets(dbTickets);
       if (dbShiftsList && dbShiftsList.length > 0) setShifts(dbShiftsList);
       if (dbTxs && dbTxs.length > 0) setTransactions(dbTxs);
+      if (dbRolesList && dbRolesList.length > 0) {
+        setRoles(dbRolesList);
+        localStorage.setItem('app_roles', JSON.stringify(dbRolesList));
+      }
+      if (dbUsersList && dbUsersList.length > 0) {
+        setUsers(dbUsersList);
+        localStorage.setItem('app_users', JSON.stringify(dbUsersList));
+      }
     } catch (e: unknown) {
       console.warn('Error loading data from Supabase:', e);
     }
@@ -398,9 +488,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const checkConnection = useCallback(async () => {
     setDbStatus('checking');
     const result = await checkSupabaseConnection();
-    if (result.connected && result.tablesExist) {
+    setRolesTableExists(result.rolesTableExists);
+    setUsersTableExists(result.usersTableExists);
+
+    if (result.connected && result.tablesExist && result.rolesTableExists && result.usersTableExists) {
       setDbStatus('connected');
       setDbError(undefined);
+      await loadDataFromDb();
+    } else if (result.connected && result.tablesExist && (!result.rolesTableExists || !result.usersTableExists)) {
+      setDbStatus('pending_roles_tables');
+      setDbError(result.error);
       await loadDataFromDb();
     } else if (result.connected && !result.tablesExist) {
       setDbStatus('pending_tables');
@@ -443,6 +540,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
         async () => {
           const freshInv = await dbFetchInventory();
           if (freshInv) setInventory(freshInv);
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'roles' },
+        async () => {
+          const freshRoles = await dbFetchRoles();
+          if (freshRoles) {
+            setRoles(freshRoles);
+            localStorage.setItem('app_roles', JSON.stringify(freshRoles));
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'app_users' },
+        async () => {
+          const freshUsers = await dbFetchUsers();
+          if (freshUsers) {
+            setUsers(freshUsers);
+            localStorage.setItem('app_users', JSON.stringify(freshUsers));
+          }
         }
       )
       .subscribe();
@@ -656,6 +775,207 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [inventoryUnits, showToast],
   );
 
+  // ==========================================
+  // Auth & Session Handlers
+  // ==========================================
+  const login = useCallback(
+    async (usernameOrEmail: string, password?: string): Promise<{ success: boolean; error?: string }> => {
+      const trimmed = usernameOrEmail.trim().toLowerCase();
+      const foundUser = users.find(
+        (u) =>
+          u.username.toLowerCase() === trimmed ||
+          u.email.toLowerCase() === trimmed ||
+          u.phone.includes(trimmed),
+      );
+
+      if (!foundUser) {
+        showToast('اسم المستخدم أو البريد الإلكتروني غير مسجل بالمنظومة', 'warning');
+        return { success: false, error: 'اسم المستخدم أو البريد الإلكتروني غير مسجل بالمنظومة' };
+      }
+
+      if (foundUser.status === 'suspended') {
+        showToast('هذا الحساب موقوف حالياً من قبل الإدارة', 'warning');
+        return { success: false, error: 'هذا الحساب موقوف حالياً من قبل الإدارة، يرجى مراجعة المسؤول' };
+      }
+
+      if (password && foundUser.password && foundUser.password !== password) {
+        showToast('كلمة المرور غير صحيحة', 'warning');
+        return { success: false, error: 'كلمة المرور المدخلة غير صحيحة، يرجى إعادة المحاولة' };
+      }
+
+      const updatedUser: AppUser = {
+        ...foundUser,
+        lastLogin: 'الآن',
+        updatedAt: new Date().toISOString(),
+      };
+
+      setCurrentUser(updatedUser);
+      setUsers((prev) => {
+        const nextUsers = prev.map((u) => (u.id === foundUser.id ? updatedUser : u));
+        localStorage.setItem('app_users', JSON.stringify(nextUsers));
+        return nextUsers;
+      });
+
+      dbUpsertUser(updatedUser);
+      showToast(`مرحباً بعودتك، ${foundUser.nameAr}!`, 'success');
+      return { success: true };
+    },
+    [users, setCurrentUser, showToast],
+  );
+
+  const logout = useCallback(() => {
+    setCurrentUser(null);
+    showToast('تم تسجيل الخروج بنجاح', 'info');
+  }, [setCurrentUser, showToast]);
+
+  // ==========================================
+  // Roles Handlers
+  // ==========================================
+  const addRole = useCallback(
+    async (newRole: Role): Promise<boolean> => {
+      setRoles((prev) => {
+        const updated = [...prev, newRole];
+        localStorage.setItem('app_roles', JSON.stringify(updated));
+        return updated;
+      });
+      showToast(`تمت إضافة الدور "${newRole.nameAr}" بنجاح`, 'success');
+      return await dbUpsertRole(newRole);
+    },
+    [showToast],
+  );
+
+  const updateRole = useCallback(
+    async (updatedRole: Role): Promise<boolean> => {
+      setRoles((prev) => {
+        const updated = prev.map((r) => (r.id === updatedRole.id ? updatedRole : r));
+        localStorage.setItem('app_roles', JSON.stringify(updated));
+        return updated;
+      });
+      showToast(`تم تحديث صلاحيات الدور "${updatedRole.nameAr}"`, 'success');
+      return await dbUpsertRole(updatedRole);
+    },
+    [showToast],
+  );
+
+  const deleteRole = useCallback(
+    async (id: string): Promise<boolean> => {
+      const roleToDelete = roles.find((r) => r.id === id);
+      if (!roleToDelete) return false;
+      if (roleToDelete.isSystem) {
+        showToast('لا يمكن حذف أدوار النظام الأساسية للحفاظ على استقرار الصلاحيات', 'warning');
+        return false;
+      }
+      const assignedUsersCount = users.filter((u) => u.roleId === id).length;
+      if (assignedUsersCount > 0) {
+        showToast(`لا يمكن حذف هذا الدور لأنه مرتبط حالياً بـ ${assignedUsersCount} مستخدم`, 'warning');
+        return false;
+      }
+      setRoles((prev) => {
+        const updated = prev.filter((r) => r.id !== id);
+        localStorage.setItem('app_roles', JSON.stringify(updated));
+        return updated;
+      });
+      showToast(`تم حذف الدور "${roleToDelete.nameAr}" بنجاح`, 'info');
+      return await dbDeleteRole(id);
+    },
+    [roles, users, showToast],
+  );
+
+  const getRoleById = useCallback(
+    (id: string) => {
+      return roles.find((r) => r.id === id);
+    },
+    [roles],
+  );
+
+  // ==========================================
+  // Users Handlers
+  // ==========================================
+  const addUser = useCallback(
+    async (newUser: AppUser): Promise<boolean> => {
+      setUsers((prev) => {
+        const updated = [newUser, ...prev];
+        localStorage.setItem('app_users', JSON.stringify(updated));
+        return updated;
+      });
+      showToast(`تم إنشاء حساب المستخدم "${newUser.nameAr}" بنجاح`, 'success');
+      return await dbUpsertUser(newUser);
+    },
+    [showToast],
+  );
+
+  const updateUser = useCallback(
+    async (updatedUser: AppUser): Promise<boolean> => {
+      setUsers((prev) => {
+        const updated = prev.map((u) => (u.id === updatedUser.id ? updatedUser : u));
+        localStorage.setItem('app_users', JSON.stringify(updated));
+        return updated;
+      });
+      if (currentUser?.id === updatedUser.id) {
+        setCurrentUser(updatedUser);
+      }
+      showToast(`تم تحديث بيانات المستخدم "${updatedUser.nameAr}"`, 'success');
+      return await dbUpsertUser(updatedUser);
+    },
+    [currentUser, setCurrentUser, showToast],
+  );
+
+  const deleteUser = useCallback(
+    async (id: string): Promise<boolean> => {
+      if (currentUser?.id === id) {
+        showToast('لا يمكنك حذف حسابك الحالي أثناء تسجيل الدخول به', 'warning');
+        return false;
+      }
+      const userToDelete = users.find((u) => u.id === id);
+      setUsers((prev) => {
+        const updated = prev.filter((u) => u.id !== id);
+        localStorage.setItem('app_users', JSON.stringify(updated));
+        return updated;
+      });
+      showToast(`تم حذف المستخدم "${userToDelete?.nameAr || id}"`, 'info');
+      return await dbDeleteUser(id);
+    },
+    [currentUser, users, showToast],
+  );
+
+  const toggleUserStatus = useCallback(
+    async (id: string, newStatus: UserStatus): Promise<boolean> => {
+      const targetUser = users.find((u) => u.id === id);
+      if (!targetUser) return false;
+      if (currentUser?.id === id && newStatus === 'suspended') {
+        showToast('لا يمكنك إيقاف حسابك الحالي المسجل به الدخول الآن', 'warning');
+        return false;
+      }
+      setUsers((prev) => {
+        const updated = prev.map((u) => (u.id === id ? { ...u, status: newStatus } : u));
+        localStorage.setItem('app_users', JSON.stringify(updated));
+        return updated;
+      });
+      if (currentUser?.id === id) {
+        setCurrentUser({ ...currentUser, status: newStatus });
+      }
+      showToast(
+        newStatus === 'active'
+          ? `تم تفعيل حساب ${targetUser.nameAr} بنجاح`
+          : `تم إيقاف حساب ${targetUser.nameAr} مؤقتاً`,
+        newStatus === 'active' ? 'success' : 'warning',
+      );
+      return await dbToggleUserStatus(id, newStatus);
+    },
+    [currentUser, users, setCurrentUser, showToast],
+  );
+
+  const hasPermission = useCallback(
+    (permissionCode: string): boolean => {
+      if (!currentUser) return false;
+      const userRole = roles.find((r) => r.id === currentUser.roleId);
+      if (!userRole) return false;
+      if (userRole.id === 'role-admin' || userRole.permissions.includes('*')) return true;
+      return userRole.permissions.includes(permissionCode);
+    },
+    [currentUser, roles],
+  );
+
   return (
     <AppContext.Provider
       value={{
@@ -669,6 +989,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         toasts,
         dbStatus,
         dbError,
+        rolesTableExists,
+        usersTableExists,
         isDbModalOpen,
         setIsDbModalOpen,
         checkConnection,
@@ -712,6 +1034,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
         addNotification,
         isSearchOpen,
         setIsSearchOpen,
+        currentUser,
+        setCurrentUser,
+        login,
+        logout,
+        roles,
+        addRole,
+        updateRole,
+        deleteRole,
+        getRoleById,
+        users,
+        addUser,
+        updateUser,
+        deleteUser,
+        toggleUserStatus,
+        hasPermission,
       }}
     >
       {children}

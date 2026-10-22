@@ -21,6 +21,7 @@ import {
   BookOpen,
   Sparkles,
   MapPin,
+  ShieldCheck,
 } from 'lucide-react';
 
 interface SearchResultItem {
@@ -290,6 +291,26 @@ export default function GlobalSearchModal({
         link: '/shifts/payroll',
         icon: Users,
       },
+      {
+        id: 'page-users-roles',
+        category: 'page',
+        categoryLabelAr: 'الصلاحيات',
+        title: 'الأدوار ومصفوفة الصلاحيات (Roles & Permissions)',
+        subtitle: 'تحديد صلاحيات الكاشير، الشيف، المشرفين، والمديرين',
+        badge: 'صلاحيات',
+        link: '/users/roles',
+        icon: ShieldCheck,
+      },
+      {
+        id: 'page-users-list',
+        category: 'page',
+        categoryLabelAr: 'المستخدمين',
+        title: 'إدارة المستخدمين والحسابات (Users Management)',
+        subtitle: 'إضافة، تفعيل، أو إيقاف حسابات مستخدمي النظام',
+        badge: 'حسابات',
+        link: '/users',
+        icon: Users,
+      },
     ],
     []
   );
@@ -402,7 +423,7 @@ export default function GlobalSearchModal({
           category: 'inventory',
           categoryLabelAr: 'مادة خام / مخزون',
           title: `${inv.nameAr} (${inv.name})`,
-          subtitle: `كود SKU: ${inv.sku} | القسم: ${inv.category} | الرصيد الحالي: ${inv.currentStock} ${inv.unit} (الحد الأدنى: ${inv.minStock} ${inv.unit})`,
+          subtitle: `كود SKU: ${inv.sku} | القسم: ${inv.category} | الرصيد الحالي: ${inv.currentStock} ${inv.unit} (الحد الأدنى: ${inv.minReorderLevel} ${inv.unit})`,
           badge: `${inv.currentStock} ${inv.unit}`,
           link: '/inventory',
           icon: Layers,

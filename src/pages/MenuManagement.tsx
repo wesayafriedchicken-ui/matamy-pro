@@ -338,9 +338,21 @@ export default function MenuManagement() {
                       </td>
                       <td className="px-5 py-3.5">
                         <div className="flex items-center gap-1.5">
-                          {item.digitalChannels.includes('website_app') && <Globe className="w-3.5 h-3.5 text-blue-400" title="ويب وتطبيق" />}
-                          {item.digitalChannels.includes('dine_in_only') && <Store className="w-3.5 h-3.5 text-success-400" title="داخل الصالة" />}
-                          {item.digitalChannels.includes('delivery_only') && <Bike className="w-3.5 h-3.5 text-brand-400" title="توصيل" />}
+                          {item.digitalChannels.includes('website_app') && (
+                            <span title="ويب وتطبيق" className="inline-flex">
+                              <Globe className="w-3.5 h-3.5 text-blue-400" />
+                            </span>
+                          )}
+                          {item.digitalChannels.includes('dine_in_only') && (
+                            <span title="داخل الصالة" className="inline-flex">
+                              <Store className="w-3.5 h-3.5 text-success-400" />
+                            </span>
+                          )}
+                          {item.digitalChannels.includes('delivery_only') && (
+                            <span title="توصيل" className="inline-flex">
+                              <Bike className="w-3.5 h-3.5 text-brand-400" />
+                            </span>
+                          )}
                         </div>
                       </td>
                       <td className="px-5 py-3.5">
