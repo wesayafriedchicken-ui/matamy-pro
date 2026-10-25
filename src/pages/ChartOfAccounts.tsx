@@ -97,7 +97,7 @@ export default function ChartOfAccounts() {
   const [expanded, setExpanded] = useState<Set<string>>(new Set(['1', '2', '3', '4', '5']));
   const [search, setSearch] = useState('');
   const [showAddAccount, setShowAddAccount] = useState(false);
-  const { showToast } = useApp();
+  const { showToast, taxRate } = useApp();
 
   const toggleExpand = (code: string) => {
     setExpanded((prev) => {
@@ -167,7 +167,7 @@ export default function ChartOfAccounts() {
       <PageHeader title="المالية والخزينة" description="دليل الحسابات الهرمي للمطعم" />
 
       {/* Sub-route nav */}
-      <div className="flex items-center gap-2 mb-6 p-1.5 bg-navy-800/60 rounded-2xl w-fit">
+      <div className="flex items-center gap-2 mb-6 p-1.5 bg-navy-800/60 rounded-2xl w-fit flex-wrap border border-navy-700/50">
         <Link to="/financials/cash-drawer" className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium text-navy-300 hover:text-white transition-all">
           <Wallet className="w-4 h-4" />
           الخزينة اليومية
@@ -179,6 +179,10 @@ export default function ChartOfAccounts() {
         <Link to="/financials/reports" className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium text-navy-300 hover:text-white transition-all">
           <BarChart3 className="w-4 h-4" />
           التقارير والميزانية
+        </Link>
+        <Link to="/financials/tax-settings" className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium text-navy-300 hover:text-white transition-all">
+          <Percent className="w-4 h-4 text-brand-400" />
+          إعدادات الضريبة (VAT: {taxRate}%)
         </Link>
       </div>
 

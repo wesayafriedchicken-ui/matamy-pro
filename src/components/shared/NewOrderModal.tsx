@@ -14,7 +14,7 @@ interface NewOrderModalProps {
 }
 
 export default function NewOrderModal({ onClose, onCreated }: NewOrderModalProps) {
-  const { menuItems } = useApp();
+  const { menuItems, taxRate, showZeroVatInCart } = useApp();
   const [deliveryType, setDeliveryType] = useState<DeliveryType>('dine_in');
   const [tableNumber, setTableNumber] = useState('');
   const [customerName, setCustomerName] = useState('');
@@ -78,7 +78,7 @@ export default function NewOrderModal({ onClose, onCreated }: NewOrderModalProps
   }, [cart, menuItems]);
 
   const subtotal = cartItems.reduce((s, i) => s + i.price * i.quantity, 0);
-  const tax = Math.round(subtotal * 0.14);
+  const tax = Math.round(subtotal * (taxRate / 100));
   const deliveryFee = deliveryType === 'delivery' ? (selectedZone ? selectedZone.deliveryFee : 30) : 0;
   const total = subtotal + tax + deliveryFee;
 
@@ -438,10 +438,12 @@ export default function NewOrderModal({ onClose, onCreated }: NewOrderModalProps
                   <span>المجموع الفرعي</span>
                   <span className="font-mono">{formatCurrency(subtotal)}</span>
                 </div>
-                <div className="flex justify-between text-navy-300 text-sm">
-                  <span>الضريبة (14%)</span>
-                  <span className="font-mono">{formatCurrency(tax)}</span>
-                </div>
+                {(taxRate > 0 || showZeroVatInCart) && (
+                  <div className="flex justify-between text-navy-300 text-sm">
+                    <span>الضريبة ({taxRate}%)</span>
+                    <span className="font-mono">{formatCurrency(tax)}</span>
+                  </div>
+                )}
                 {deliveryType === 'delivery' && (
                   <div className="space-y-1 pt-1 border-t border-navy-800">
                     <div className="flex justify-between text-navy-300 text-sm">

@@ -6,7 +6,7 @@ import {
   ArrowRight, Printer, RefreshCw, Clock, User, Phone, MapPin, CreditCard,
   Bike, Package, ChefHat, CheckCircle2, Navigation, Battery, Gauge,
   Receipt, Utensils, AlertCircle, ChevronDown, ChevronUp,
-  MapPinned, Zap, CircleDot,
+  MapPinned, Zap, CircleDot, MessageSquare,
 } from 'lucide-react';
 import { statusConfig, channelConfig, formatCurrency, getElapsedMinutes } from '@/utils/helpers';
 import StatusBadge from '@/components/shared/StatusBadge';
@@ -292,6 +292,9 @@ export default function OrderDetail() {
             <div className="space-y-2.5">
               <InfoRow icon={User} label="اسم العميل" value={order.customerName} />
               <InfoRow icon={Phone} label="رقم الهاتف" value={order.customerPhone} />
+              {order.customerWhatsapp && (
+                <InfoRow icon={MessageSquare} label="رقم الواتساب" value={order.customerWhatsapp} />
+              )}
               <InfoRow icon={Phone} label="هاتف بديل" value="01099887766" />
               <InfoRow
                 icon={CreditCard}
@@ -470,7 +473,9 @@ export default function OrderDetail() {
                 <span className="font-mono">{formatCurrency(order.subtotal)}</span>
               </div>
               <div className="flex justify-between text-navy-300 text-sm">
-                <span>ضريبة القيمة المضافة (14%)</span>
+                <span>
+                  ضريبة القيمة المضافة ({order.subtotal > 0 ? Math.round((order.tax / order.subtotal) * 100) : 0}%)
+                </span>
                 <span className="font-mono">{formatCurrency(order.tax)}</span>
               </div>
               {order.deliveryFee > 0 && (

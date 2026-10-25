@@ -61,6 +61,7 @@ export const deliveryTypeConfig: Record<
   dine_in: { labelAr: 'صالة', icon: 'utensils' },
   takeaway: { labelAr: 'تيك أوي', icon: 'shopping-bag' },
   delivery: { labelAr: 'توصيل', icon: 'bike' },
+  talabat: { labelAr: 'ابلكيشن طلبات', icon: 'smartphone' },
 };
 
 export const channelConfig: Record<OrderChannel, { labelAr: string; color: string }> = {
@@ -68,6 +69,7 @@ export const channelConfig: Record<OrderChannel, { labelAr: string; color: strin
   app: { labelAr: 'تطبيق', color: 'text-brand-400' },
   website: { labelAr: 'موقع', color: 'text-blue-400' },
   phone: { labelAr: 'هاتف', color: 'text-success-400' },
+  talabat: { labelAr: 'طلبات', color: 'text-amber-400' },
 };
 
 export function getElapsedMinutes(isoString: string): number {

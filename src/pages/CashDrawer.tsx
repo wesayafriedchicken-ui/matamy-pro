@@ -5,11 +5,12 @@ import {
   Wallet, TrendingUp, TrendingDown,
   ArrowUpCircle, ArrowDownCircle, Save, X, FileText,
   Receipt, AlertCircle, CheckCircle2, Clock, User, Upload,
-  BookOpen, BarChart3,
+  BookOpen, BarChart3, Percent,
 } from 'lucide-react';
 import { formatCurrency } from '@/utils/helpers';
 import PageHeader from '@/components/shared/PageHeader';
 import StatCard from '@/components/shared/StatCard';
+import VatSettingsCard from '@/components/finance/VatSettingsCard';
 
 interface CashMovement {
   id: string;
@@ -45,11 +46,12 @@ const movementTypeConfig: Record<string, { color: string; bg: string; icon: type
 };
 
 export default function CashDrawer() {
-  const { showToast } = useApp();
+  const { showToast, taxRate } = useApp();
   const [movements, setMovements] = useState<CashMovement[]>(initialMovements);
   const [showPetty, setShowPetty] = useState(false);
   const [showDeposit, setShowDeposit] = useState(false);
   const [showZReport, setShowZReport] = useState(false);
+  const [showVatSettings, setShowVatSettings] = useState(false);
 
   const currentBalance = movements.length > 0 ? movements[movements.length - 1].balanceAfter : 0;
   const cashIn = movements.filter((m) => m.amount > 0).reduce((s, m) => s + m.amount, 0);
@@ -68,10 +70,10 @@ export default function CashDrawer() {
 
   return (
     <div className="animate-fade-in">
-      <PageHeader title="المالية والخزينة" description="الخزينة والحركة النقدية اليومية" />
+      <PageHeader title="المالية والخزينة" description="الخزينة والحركة النقدية اليومية وإعدادات الضرائب" />
 
       {/* Sub-route nav */}
-      <div className="flex items-center gap-2 mb-6 p-1.5 bg-navy-800/60 rounded-2xl w-fit">
+      <div className="flex items-center gap-2 mb-6 p-1.5 bg-navy-800/60 rounded-2xl w-fit flex-wrap border border-navy-700/50">
         <span className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold bg-brand-500 text-white shadow-lg shadow-brand-500/20">
           <Wallet className="w-4 h-4" />
           الخزينة اليومية
@@ -83,6 +85,10 @@ export default function CashDrawer() {
         <Link to="/financials/reports" className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium text-navy-300 hover:text-white transition-all">
           <BarChart3 className="w-4 h-4" />
           التقارير والميزانية
+        </Link>
+        <Link to="/financials/tax-settings" className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium text-navy-300 hover:text-white transition-all">
+          <Percent className="w-4 h-4 text-brand-400" />
+          إعدادات الضريبة (VAT: {taxRate}%)
         </Link>
       </div>
 
@@ -107,7 +113,25 @@ export default function CashDrawer() {
           <FileText className="w-4 h-4" />
           إقفال اليومية وحساب العجز/الزيادة
         </button>
+        <button
+          onClick={() => setShowVatSettings((prev) => !prev)}
+          className={`btn-ghost flex items-center gap-2 text-sm transition-all ${
+            showVatSettings
+              ? 'bg-brand-500/20 text-brand-300 border-brand-500/40 shadow-sm'
+              : 'text-navy-200 hover:text-white'
+          }`}
+        >
+          <Percent className="w-4 h-4 text-brand-400" />
+          {showVatSettings ? 'إخفاء لوحة الضريبة' : `تعديل ضريبة القيمة المضافة (${taxRate}%)`}
+        </button>
       </div>
+
+      {/* Inline VAT Settings Card when toggled */}
+      {showVatSettings && (
+        <div className="mb-6 animate-scale-in">
+          <VatSettingsCard onSaved={() => {}} />
+        </div>
+      )}
 
       {/* Cash Movement Log */}
       <div className="glass-card overflow-hidden">

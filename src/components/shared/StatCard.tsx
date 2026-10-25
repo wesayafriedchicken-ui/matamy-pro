@@ -6,21 +6,23 @@ interface StatCardProps {
   label: string;
   value: string;
   change?: number;
-  color: 'brand' | 'success' | 'warning' | 'danger' | 'blue' | 'purple';
+  color?: 'brand' | 'success' | 'warning' | 'danger' | 'blue' | 'purple' | 'info' | 'emerald';
   sublabel?: string;
 }
 
-const colorMap = {
+const colorMap: Record<string, { bg: string; text: string; ring: string }> = {
   brand: { bg: 'bg-brand-500/10', text: 'text-brand-400', ring: 'ring-brand-500/20' },
   success: { bg: 'bg-success-500/10', text: 'text-success-400', ring: 'ring-success-500/20' },
   warning: { bg: 'bg-warning-500/10', text: 'text-warning-400', ring: 'ring-warning-500/20' },
   danger: { bg: 'bg-danger-500/10', text: 'text-danger-400', ring: 'ring-danger-500/20' },
   blue: { bg: 'bg-blue-500/10', text: 'text-blue-400', ring: 'ring-blue-500/20' },
+  info: { bg: 'bg-blue-500/10', text: 'text-blue-400', ring: 'ring-blue-500/20' },
+  emerald: { bg: 'bg-emerald-500/10', text: 'text-emerald-400', ring: 'ring-emerald-500/20' },
   purple: { bg: 'bg-purple-500/10', text: 'text-purple-400', ring: 'ring-purple-500/20' },
 };
 
-export default function StatCard({ icon: Icon, label, value, change, color, sublabel }: StatCardProps) {
-  const c = colorMap[color];
+export default function StatCard({ icon: Icon, label, value, change, color = 'brand', sublabel }: StatCardProps) {
+  const c = colorMap[color] || colorMap.brand;
   const positive = (change ?? 0) >= 0;
 
   return (

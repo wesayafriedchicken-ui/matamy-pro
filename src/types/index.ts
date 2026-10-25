@@ -6,9 +6,9 @@ export type OrderStatus =
   | 'completed'
   | 'cancelled';
 
-export type DeliveryType = 'dine_in' | 'takeaway' | 'delivery';
+export type DeliveryType = 'dine_in' | 'takeaway' | 'delivery' | 'talabat';
 
-export type OrderChannel = 'pos' | 'app' | 'website' | 'phone';
+export type OrderChannel = 'pos' | 'app' | 'website' | 'phone' | 'talabat';
 
 export interface OrderItem {
   id: string;
@@ -26,6 +26,7 @@ export interface Order {
   orderNumber: string;
   customerName: string;
   customerPhone: string;
+  customerWhatsapp?: string;
   items: OrderItem[];
   total: number;
   subtotal: number;

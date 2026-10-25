@@ -20,6 +20,7 @@ import DigitalStoreBuilder from '@/pages/DigitalStoreBuilder';
 import CashDrawer from '@/pages/CashDrawer';
 import ChartOfAccounts from '@/pages/ChartOfAccounts';
 import FinancialReports from '@/pages/FinancialReports';
+import TaxSettings from '@/pages/TaxSettings';
 import ShiftSchedule from '@/pages/ShiftSchedule';
 import ShiftTasks from '@/pages/ShiftTasks';
 import ShiftPayroll from '@/pages/ShiftPayroll';
@@ -201,6 +202,14 @@ export default function App() {
               element={
                 <ProtectedRoute requiredPermission="financials.view" pageTitleAr="التقارير المالية والميزانية">
                   <FinancialReports />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/financials/tax-settings"
+              element={
+                <ProtectedRoute requiredPermission="financials.manage" pageTitleAr="إعدادات ضريبة القيمة المضافة (VAT)">
+                  <TaxSettings />
                 </ProtectedRoute>
               }
             />

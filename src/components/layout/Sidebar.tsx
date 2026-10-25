@@ -24,6 +24,7 @@ import {
   MapPin,
   ShieldCheck,
   Shield,
+  Percent,
 } from 'lucide-react';
 import { useApp } from '@/context/AppContext';
 
@@ -99,6 +100,7 @@ const navItems: NavItem[] = [
       { id: 'cash-drawer', labelAr: 'الخزينة اليومية', path: '/financials/cash-drawer', icon: Wallet, requiredPermission: 'financials.manage' },
       { id: 'chart-of-accounts', labelAr: 'دليل الحسابات', path: '/financials/chart-of-accounts', icon: BookOpen, requiredPermission: 'financials.view' },
       { id: 'financial-reports', labelAr: 'التقارير والميزانية', path: '/financials/reports', icon: BarChart3, requiredPermission: 'financials.view' },
+      { id: 'tax-settings', labelAr: 'إعدادات الضريبة (VAT)', path: '/financials/tax-settings', icon: Percent, requiredPermission: 'financials.manage' },
     ],
   },
   {

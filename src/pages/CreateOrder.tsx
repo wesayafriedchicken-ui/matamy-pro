@@ -25,6 +25,8 @@ import {
   X,
   ChevronLeft,
   Compass,
+  Smartphone,
+  MessageSquare,
 } from 'lucide-react';
 import { formatCurrency } from '@/utils/helpers';
 import { defaultDeliveryZones } from '@/data/deliveryZonesData';
@@ -39,13 +41,14 @@ interface CartEntry {
 
 export default function CreateOrder() {
   const navigate = useNavigate();
-  const { menuItems, addOrder, showToast } = useApp();
+  const { menuItems, addOrder, showToast, taxRate, showZeroVatInCart } = useApp();
 
   const [deliveryType, setDeliveryType] = useState<DeliveryType>('dine_in');
   const [channel, setChannel] = useState<OrderChannel>('pos');
   const [tableNumber, setTableNumber] = useState('1');
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
+  const [customerWhatsapp, setCustomerWhatsapp] = useState('');
   const [address, setAddress] = useState('');
   const [orderNotes, setOrderNotes] = useState('');
 
@@ -135,7 +138,7 @@ export default function CreateOrder() {
   }, [cart, menuItems]);
 
   const subtotal = cartItems.reduce((acc, i) => acc + i.price * i.quantity, 0);
-  const tax = Math.round(subtotal * 0.14);
+  const tax = Math.round(subtotal * (taxRate / 100));
   const deliveryFee = deliveryType === 'delivery' ? (selectedZone ? selectedZone.deliveryFee : 30) : 0;
   const total = subtotal + tax + deliveryFee;
 
@@ -222,8 +225,9 @@ export default function CreateOrder() {
     const newOrder: Order = {
       id: `ord-${Date.now()}`,
       orderNumber,
-      customerName: customerName.trim() || (deliveryType === 'dine_in' ? `طاولة ${tableNumber}` : 'عميل مباشر'),
+      customerName: customerName.trim() || (deliveryType === 'dine_in' ? `طاولة ${tableNumber}` : deliveryType === 'talabat' ? 'عميل طلبات' : 'عميل مباشر'),
       customerPhone: customerPhone.trim() || '—',
+      customerWhatsapp: customerWhatsapp.trim() || undefined,
       items: cartItems.map(({ basePrice: _base, entryIdx: _idx, ...rest }) => rest),
       total,
       subtotal,
@@ -309,7 +313,7 @@ export default function CreateOrder() {
                 حدد نوع الطلب والقناة:
               </span>
               <div className="flex items-center gap-1 bg-navy-900/80 p-1 rounded-xl border border-navy-700/50 text-xs">
-                {(['pos', 'phone', 'app', 'website'] as OrderChannel[]).map((ch) => (
+                {(['pos', 'phone', 'app', 'website', 'talabat'] as OrderChannel[]).map((ch) => (
                   <button
                     key={ch}
                     onClick={() => setChannel(ch)}
@@ -323,13 +327,14 @@ export default function CreateOrder() {
                     {ch === 'phone' && 'هاتف'}
                     {ch === 'app' && 'تطبيق'}
                     {ch === 'website' && 'موقع'}
+                    {ch === 'talabat' && 'طلبات'}
                   </button>
                 ))}
               </div>
             </div>
 
             {/* Type Cards */}
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
               <button
                 type="button"
                 onClick={() => setDeliveryType('dine_in')}
@@ -377,6 +382,25 @@ export default function CreateOrder() {
                   <p className="text-[11px] opacity-75 hidden sm:block">مع مندوب التوصيل</p>
                 </div>
               </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setDeliveryType('talabat');
+                  setChannel('talabat');
+                }}
+                className={`flex flex-col sm:flex-row items-center justify-center gap-2.5 p-3.5 rounded-xl border-2 transition-all ${
+                  deliveryType === 'talabat'
+                    ? 'bg-amber-500/15 border-amber-500 text-amber-400 shadow-lg shadow-amber-500/10'
+                    : 'bg-navy-900/60 border-navy-700/60 text-navy-400 hover:text-white hover:border-navy-600'
+                }`}
+              >
+                <Smartphone className="w-5 h-5 shrink-0 text-amber-400" />
+                <div className="text-center sm:text-right">
+                  <p className="font-bold text-sm">ابلكيشن طلبات</p>
+                  <p className="text-[11px] opacity-75 hidden sm:block">استلام كابتن طلبات</p>
+                </div>
+              </button>
             </div>
 
             {/* Dynamic Inputs depending on type */}
@@ -415,27 +439,45 @@ export default function CreateOrder() {
               </div>
             )}
 
-            {deliveryType === 'takeaway' && (
-              <div className="pt-2 border-t border-navy-700/40 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="relative">
-                  <User className="w-4 h-4 text-navy-400 absolute right-3 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="text"
-                    placeholder="اسم العميل (اختياري)"
-                    value={customerName}
-                    onChange={(e) => setCustomerName(e.target.value)}
-                    className="input-field pr-9 text-xs"
-                  />
-                </div>
-                <div className="relative">
-                  <Phone className="w-4 h-4 text-navy-400 absolute right-3 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="text"
-                    placeholder="رقم الهاتف (اختياري)"
-                    value={customerPhone}
-                    onChange={(e) => setCustomerPhone(e.target.value)}
-                    className="input-field pr-9 text-xs"
-                  />
+            {(deliveryType === 'takeaway' || deliveryType === 'talabat') && (
+              <div className="pt-2 border-t border-navy-700/40 space-y-2">
+                {deliveryType === 'talabat' && (
+                  <div className="flex items-center gap-2 text-xs text-amber-400 bg-amber-500/10 border border-amber-500/20 px-3 py-1.5 rounded-xl">
+                    <Smartphone className="w-4 h-4 shrink-0" />
+                    <span>طلب وارد عبر منصة طلبات (Talabat) - استلام مباشر عبر كابتن طلبات</span>
+                  </div>
+                )}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="relative">
+                    <User className="w-4 h-4 text-navy-400 absolute right-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      placeholder={deliveryType === 'talabat' ? "اسم العميل / كود طلبات (اختياري)" : "اسم العميل (اختياري)"}
+                      value={customerName}
+                      onChange={(e) => setCustomerName(e.target.value)}
+                      className="input-field pr-9 text-xs"
+                    />
+                  </div>
+                  <div className="relative">
+                    <Phone className="w-4 h-4 text-navy-400 absolute right-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      placeholder="رقم الهاتف (اختياري)"
+                      value={customerPhone}
+                      onChange={(e) => setCustomerPhone(e.target.value)}
+                      className="input-field pr-9 text-xs"
+                    />
+                  </div>
+                  <div className="relative">
+                    <MessageSquare className="w-4 h-4 text-emerald-400 absolute right-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      placeholder="رقم الواتساب (اختياري)"
+                      value={customerWhatsapp}
+                      onChange={(e) => setCustomerWhatsapp(e.target.value)}
+                      className="input-field pr-9 text-xs"
+                    />
+                  </div>
                 </div>
               </div>
             )}
@@ -443,7 +485,7 @@ export default function CreateOrder() {
             {deliveryType === 'delivery' && (
               <div className="pt-2 border-t border-navy-700/40 space-y-3">
                 {/* Customer Basic Info */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div className="relative">
                     <User className="w-4 h-4 text-navy-400 absolute right-3 top-1/2 -translate-y-1/2" />
                     <input
@@ -464,6 +506,16 @@ export default function CreateOrder() {
                       onChange={(e) => setCustomerPhone(e.target.value)}
                       className="input-field pr-9 text-xs"
                       required
+                    />
+                  </div>
+                  <div className="relative">
+                    <MessageSquare className="w-4 h-4 text-emerald-400 absolute right-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      placeholder="رقم الواتساب (اختياري)"
+                      value={customerWhatsapp}
+                      onChange={(e) => setCustomerWhatsapp(e.target.value)}
+                      className="input-field pr-9 text-xs"
                     />
                   </div>
                 </div>
@@ -950,10 +1002,19 @@ export default function CreateOrder() {
                 <span>المجموع الفرعي ({cartItems.length} صنف)</span>
                 <span className="font-mono font-semibold">{formatCurrency(subtotal)}</span>
               </div>
-              <div className="flex justify-between text-navy-300">
-                <span>ضريبة القيمة المضافة (14%)</span>
-                <span className="font-mono">{formatCurrency(tax)}</span>
-              </div>
+              {(taxRate > 0 || showZeroVatInCart) && (
+                <div className="flex justify-between items-center text-navy-300">
+                  <span className="flex items-center gap-1.5">
+                    <span>ضريبة القيمة المضافة ({taxRate}%)</span>
+                    {taxRate === 0 && (
+                      <span className="text-[10px] bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 px-1.5 py-0.5 rounded font-medium">
+                        0% (معفاة)
+                      </span>
+                    )}
+                  </span>
+                  <span className="font-mono">{formatCurrency(tax)}</span>
+                </div>
+              )}
               {deliveryType === 'delivery' && (
                 <div className="space-y-1.5 py-1.5 border-t border-navy-800/80">
                   <div className="flex justify-between items-center text-navy-200">

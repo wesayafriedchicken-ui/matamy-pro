@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useApp } from '@/context/AppContext';
 import {
   Wallet, BookOpen, BarChart3, TrendingUp, TrendingDown,
   DollarSign, Scale, Building2, CheckCircle2, Calendar,
-  Download, FileText, PieChart,
+  Download, FileText, PieChart, Percent,
 } from 'lucide-react';
 import { formatCurrency } from '@/utils/helpers';
 import PageHeader from '@/components/shared/PageHeader';
@@ -84,6 +85,7 @@ const balanceSheet = {
 };
 
 export default function FinancialReports() {
+  const { taxRate } = useApp();
   const [range, setRange] = useState<DateRange>('month');
   const lines = plData[range];
 
@@ -103,7 +105,7 @@ export default function FinancialReports() {
       <PageHeader title="المالية والخزينة" description="التقارير المالية وقائمة الدخل والميزانية" />
 
       {/* Sub-route nav */}
-      <div className="flex items-center gap-2 mb-6 p-1.5 bg-navy-800/60 rounded-2xl w-fit">
+      <div className="flex items-center gap-2 mb-6 p-1.5 bg-navy-800/60 rounded-2xl w-fit flex-wrap border border-navy-700/50">
         <Link to="/financials/cash-drawer" className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium text-navy-300 hover:text-white transition-all">
           <Wallet className="w-4 h-4" />
           الخزينة اليومية
@@ -116,6 +118,10 @@ export default function FinancialReports() {
           <BarChart3 className="w-4 h-4" />
           التقارير والميزانية
         </span>
+        <Link to="/financials/tax-settings" className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium text-navy-300 hover:text-white transition-all">
+          <Percent className="w-4 h-4 text-brand-400" />
+          إعدادات الضريبة (VAT: {taxRate}%)
+        </Link>
       </div>
 
       {/* KPI Cards */}

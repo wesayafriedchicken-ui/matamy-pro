@@ -131,6 +131,11 @@ interface AppContextValue {
   deleteUser: (id: string) => Promise<boolean>;
   toggleUserStatus: (id: string, status: UserStatus) => Promise<boolean>;
   hasPermission: (permissionCode: string) => boolean;
+  // Tax & VAT Settings
+  taxRate: number;
+  setTaxRate: (rate: number) => void;
+  showZeroVatInCart: boolean;
+  setShowZeroVatInCart: (show: boolean) => void;
 }
 
 export interface InventoryCategoryOption {
@@ -249,6 +254,54 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [rolesTableExists, setRolesTableExists] = useState(false);
   const [usersTableExists, setUsersTableExists] = useState(false);
   const [isDbModalOpen, setIsDbModalOpen] = useState(false);
+
+  // VAT / Sales Tax Rate State (defaults to 0%)
+  const [taxRate, setTaxRateState] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem('nine_fries_vat_rate_v1');
+      if (saved !== null) {
+        const parsed = parseFloat(saved);
+        if (!isNaN(parsed) && parsed >= 0) {
+          return parsed;
+        }
+      }
+    } catch {
+      // fallback
+    }
+    return 0; // Default VAT is 0%
+  });
+
+  const setTaxRate = useCallback((rate: number) => {
+    const cleanRate = Math.max(0, Math.min(100, Math.round(rate * 100) / 100));
+    setTaxRateState(cleanRate);
+    try {
+      localStorage.setItem('nine_fries_vat_rate_v1', String(cleanRate));
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  // Show/Hide VAT line in Cart when 0%
+  const [showZeroVatInCart, setShowZeroVatInCartState] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('nine_fries_show_zero_vat_v1');
+      if (saved !== null) {
+        return saved === 'true';
+      }
+    } catch {
+      // fallback
+    }
+    return false; // Hidden by default when 0%
+  });
+
+  const setShowZeroVatInCart = useCallback((show: boolean) => {
+    setShowZeroVatInCartState(show);
+    try {
+      localStorage.setItem('nine_fries_show_zero_vat_v1', String(show));
+    } catch {
+      // ignore
+    }
+  }, []);
 
   // Roles & Permissions State
   const [roles, setRoles] = useState<Role[]>(() => {
@@ -1049,6 +1102,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         deleteUser,
         toggleUserStatus,
         hasPermission,
+        taxRate,
+        setTaxRate,
+        showZeroVatInCart,
+        setShowZeroVatInCart,
       }}
     >
       {children}
