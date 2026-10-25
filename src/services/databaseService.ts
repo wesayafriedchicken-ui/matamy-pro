@@ -411,6 +411,34 @@ export async function dbFetchTransactions(): Promise<Transaction[] | null> {
   }));
 }
 
+export async function dbCreateTransaction(tx: Transaction): Promise<boolean> {
+  const { error } = await supabase.from('transactions').insert({
+    id: tx.id,
+    type: tx.type,
+    category: tx.category,
+    category_ar: tx.categoryAr,
+    amount: tx.amount,
+    description: tx.description || null,
+    description_ar: tx.descriptionAr || null,
+    date: tx.date || new Date().toISOString(),
+    method: tx.method,
+  });
+  if (error) {
+    console.warn('[Supabase] Failed to insert transaction:', error.message);
+    return false;
+  }
+  return true;
+}
+
+export async function dbDeleteTransaction(id: string): Promise<boolean> {
+  const { error } = await supabase.from('transactions').delete().eq('id', id);
+  if (error) {
+    console.warn('[Supabase] Failed to delete transaction:', error.message);
+    return false;
+  }
+  return true;
+}
+
 // ==========================================
 // Roles & Permissions
 // ==========================================

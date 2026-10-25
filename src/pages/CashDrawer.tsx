@@ -1,18 +1,18 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useApp } from '@/context/AppContext';
 import {
   Wallet, TrendingUp, TrendingDown,
   ArrowUpCircle, ArrowDownCircle, Save, X, FileText,
-  Receipt, AlertCircle, CheckCircle2, Clock, User, Upload,
-  BookOpen, BarChart3, Percent,
+  Receipt, AlertCircle, CheckCircle2, Clock, User,
+  BookOpen, BarChart3, Percent, RotateCcw,
 } from 'lucide-react';
 import { formatCurrency } from '@/utils/helpers';
 import PageHeader from '@/components/shared/PageHeader';
 import StatCard from '@/components/shared/StatCard';
 import VatSettingsCard from '@/components/finance/VatSettingsCard';
 
-interface CashMovement {
+export interface CashMovement {
   id: string;
   refNo: string;
   time: string;
@@ -20,21 +20,9 @@ interface CashMovement {
   typeAr: string;
   amount: number;
   responsible: string;
+  notes?: string;
   balanceAfter: number;
 }
-
-const initialMovements: CashMovement[] = [
-  { id: 'cm1', refNo: 'CM-001', time: '08:15', type: 'deposit', typeAr: 'إيداع افتتاحي', amount: 2000, responsible: 'عمر يوسف', balanceAfter: 2000 },
-  { id: 'cm2', refNo: 'CM-002', time: '09:30', type: 'sales', typeAr: 'مبيعات صالة', amount: 345, responsible: 'سارة حسن', balanceAfter: 2345 },
-  { id: 'cm3', refNo: 'CM-003', time: '10:15', type: 'purchase', typeAr: 'شراء خضار', amount: -180, responsible: 'أحمد علي', balanceAfter: 2165 },
-  { id: 'cm4', refNo: 'CM-004', time: '11:00', type: 'sales', typeAr: 'مبيعات صالة', amount: 520, responsible: 'سارة حسن', balanceAfter: 2685 },
-  { id: 'cm5', refNo: 'CM-005', time: '12:30', type: 'rider_deposit', typeAr: 'توريد مندوب', amount: 715, responsible: 'سيد أحمد', balanceAfter: 3400 },
-  { id: 'cm6', refNo: 'CM-006', time: '13:45', type: 'sales', typeAr: 'مبيعات صالة', amount: 890, responsible: 'سارة حسن', balanceAfter: 4290 },
-  { id: 'cm7', refNo: 'CM-007', time: '14:20', type: 'maintenance', typeAr: 'صيانة فرن', amount: -350, responsible: 'عمر يوسف', balanceAfter: 3940 },
-  { id: 'cm8', refNo: 'CM-008', time: '15:30', type: 'sales', typeAr: 'مبيعات تطبيق', amount: 430, responsible: 'سارة حسن', balanceAfter: 4370 },
-  { id: 'cm9', refNo: 'CM-009', time: '16:00', type: 'rider_deposit', typeAr: 'توريد مندوب', amount: 520, responsible: 'خالد سامي', balanceAfter: 4890 },
-  { id: 'cm10', refNo: 'CM-010', time: '17:15', type: 'petty', typeAr: 'مصروف نثري - ماء', amount: -45, responsible: 'فاطمة نور', balanceAfter: 4845 },
-];
 
 const movementTypeConfig: Record<string, { color: string; bg: string; icon: typeof ArrowUpCircle }> = {
   sales: { color: 'text-success-400', bg: 'bg-success-500/15', icon: ArrowUpCircle },
@@ -46,26 +34,168 @@ const movementTypeConfig: Record<string, { color: string; bg: string; icon: type
 };
 
 export default function CashDrawer() {
-  const { showToast, taxRate } = useApp();
-  const [movements, setMovements] = useState<CashMovement[]>(initialMovements);
+  const { showToast, taxRate, addTransaction, currentUser } = useApp();
+
+  // Load real persistent movements from localStorage, defaulting to empty array (ZERO fake data)
+  const [movements, setMovements] = useState<CashMovement[]>(() => {
+    try {
+      const saved = localStorage.getItem('nine_fries_cash_movements_v2');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch {
+      // ignore
+    }
+    return []; // Zero fake data by default
+  });
+
+  // Modals state
   const [showPetty, setShowPetty] = useState(false);
   const [showDeposit, setShowDeposit] = useState(false);
   const [showZReport, setShowZReport] = useState(false);
   const [showVatSettings, setShowVatSettings] = useState(false);
 
+  // Form states for Petty Cash
+  const [pettyCategory, setPettyCategory] = useState('supplies');
+  const [pettyAmount, setPettyAmount] = useState('');
+  const [pettyResponsible, setPettyResponsible] = useState(currentUser?.nameAr || '');
+  const [pettyNotes, setPettyNotes] = useState('');
+
+  // Form states for Cash Deposit
+  const [depositType, setDepositType] = useState('deposit');
+  const [depositAmount, setDepositAmount] = useState('');
+  const [depositRef, setDepositRef] = useState(currentUser?.nameAr || '');
+  const [depositNotes, setDepositNotes] = useState('');
+
+  // Sync movements to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem('nine_fries_cash_movements_v2', JSON.stringify(movements));
+    } catch {
+      // ignore
+    }
+  }, [movements]);
+
   const currentBalance = movements.length > 0 ? movements[movements.length - 1].balanceAfter : 0;
   const cashIn = movements.filter((m) => m.amount > 0).reduce((s, m) => s + m.amount, 0);
   const cashOut = movements.filter((m) => m.amount < 0).reduce((s, m) => s + Math.abs(m.amount), 0);
 
-  const _addMovement = (type: CashMovement['type'], typeAr: string, amount: number, responsible: string) => {
-    const newBalance = currentBalance + amount;
+  // Initial opening balance is the first deposit if any, or 0
+  const openingDeposit = movements.length > 0 && movements[0].type === 'deposit' ? movements[0].amount : 0;
+
+  // Handle Adding Petty Expense
+  const handleSavePetty = async () => {
+    const amt = parseFloat(pettyAmount);
+    if (isNaN(amt) || amt <= 0) {
+      showToast('يرجى إدخال مبلغ صحيح للمصروف النثري', 'warning');
+      return;
+    }
+
+    const typeArMap: Record<string, string> = {
+      maintenance: 'صيانة ومعدات',
+      supplies: 'مستلزمات ونثريات',
+      transport: 'انتقالات ومواصلات',
+      cleaning: 'مواد نظافة',
+      other: 'مصروفات نثرية أخرى',
+    };
+
+    const typeAr = typeArMap[pettyCategory] || 'مصروف نثري';
+    const newBalance = currentBalance - amt;
+
     const newMv: CashMovement = {
       id: `cm-${Date.now()}`,
       refNo: `CM-${String(movements.length + 1).padStart(3, '0')}`,
       time: new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }),
-      type, typeAr, amount, responsible, balanceAfter: newBalance,
+      type: 'petty',
+      typeAr,
+      amount: -amt,
+      responsible: pettyResponsible.trim() || currentUser?.nameAr || 'المسؤول',
+      notes: pettyNotes.trim(),
+      balanceAfter: newBalance,
     };
+
     setMovements((prev) => [...prev, newMv]);
+
+    // Mirror to AppContext transactions and Supabase database
+    await addTransaction({
+      id: newMv.id,
+      type: 'expense',
+      category: 'Petty Expense',
+      categoryAr: typeAr,
+      amount: amt,
+      description: pettyNotes ? `مصروف نثري: ${pettyNotes}` : typeAr,
+      descriptionAr: pettyNotes ? `مصروف نثري: ${pettyNotes}` : typeAr,
+      date: new Date().toISOString(),
+      method: 'cash',
+    });
+
+    setPettyAmount('');
+    setPettyNotes('');
+    setShowPetty(false);
+    showToast('تم تسجيل المصروف النثري وخصمه من الخزينة بنجاح', 'success');
+  };
+
+  // Handle Adding Deposit / Cash-in
+  const handleSaveDeposit = async () => {
+    const amt = parseFloat(depositAmount);
+    if (isNaN(amt) || amt <= 0) {
+      showToast('يرجى إدخال مبلغ إيداع صحيح', 'warning');
+      return;
+    }
+
+    const depositLabels: Record<string, string> = {
+      deposit: 'إيداع افتتاحي / نقدي',
+      rider_deposit: 'توريد عهدة من مندوب',
+      sales: 'مبيعات نقدية مجمعة',
+      owner: 'تمويل إضافي / المالك',
+      other: 'توريد نقدي آخر',
+    };
+
+    const typeAr = depositLabels[depositType] || 'توريد نقدية';
+    const mvType = depositType === 'rider_deposit' ? 'rider_deposit' : depositType === 'sales' ? 'sales' : 'deposit';
+    const newBalance = currentBalance + amt;
+
+    const newMv: CashMovement = {
+      id: `cm-${Date.now()}`,
+      refNo: `CM-${String(movements.length + 1).padStart(3, '0')}`,
+      time: new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }),
+      type: mvType,
+      typeAr,
+      amount: amt,
+      responsible: depositRef.trim() || currentUser?.nameAr || 'المسؤول',
+      notes: depositNotes.trim(),
+      balanceAfter: newBalance,
+    };
+
+    setMovements((prev) => [...prev, newMv]);
+
+    // Mirror to AppContext transactions and Supabase database
+    await addTransaction({
+      id: newMv.id,
+      type: 'income',
+      category: 'Cash Drawer Deposit',
+      categoryAr: typeAr,
+      amount: amt,
+      description: depositNotes ? `توريد خزينة: ${depositNotes}` : typeAr,
+      descriptionAr: depositNotes ? `توريد خزينة: ${depositNotes}` : typeAr,
+      date: new Date().toISOString(),
+      method: 'cash',
+    });
+
+    setDepositAmount('');
+    setDepositNotes('');
+    setShowDeposit(false);
+    showToast('تم تسجيل التوريد النقدي وحفظه بالخزينة وقاعدة البيانات', 'success');
+  };
+
+  // Reset Drawer (Clear all movements to 0)
+  const handleResetDrawer = () => {
+    if (window.confirm('هل أنت متأكد من تصفير سجل الخزينة بالكامل؟ سيبدأ الرصيد من 0.00 ج.م.')) {
+      setMovements([]);
+      localStorage.removeItem('nine_fries_cash_movements_v2');
+      showToast('تم تصفير الخزينة بنجاح، الرصيد الآن 0.00 ج.م', 'info');
+    }
   };
 
   return (
@@ -92,7 +222,7 @@ export default function CashDrawer() {
         </Link>
       </div>
 
-      {/* KPI Cards */}
+      {/* Real KPI Cards - ZERO fake data */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
         <StatCard icon={Wallet} label="النقدية الحالية بالخزينة" value={formatCurrency(currentBalance)} color="brand" />
         <StatCard icon={TrendingUp} label="إجمالي مقبوضات اليوم" value={formatCurrency(cashIn)} color="success" />
@@ -124,6 +254,16 @@ export default function CashDrawer() {
           <Percent className="w-4 h-4 text-brand-400" />
           {showVatSettings ? 'إخفاء لوحة الضريبة' : `تعديل ضريبة القيمة المضافة (${taxRate}%)`}
         </button>
+        {movements.length > 0 && (
+          <button
+            onClick={handleResetDrawer}
+            className="btn-ghost text-xs text-navy-400 hover:text-danger-400 mr-auto flex items-center gap-1.5"
+            title="تصفير الخزينة"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+            تصفير الخزينة
+          </button>
+        )}
       </div>
 
       {/* Inline VAT Settings Card when toggled */}
@@ -142,59 +282,95 @@ export default function CashDrawer() {
           </h3>
           <span className="text-navy-400 text-sm">{movements.length} حركة</span>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-navy-700/50">
-                <th className="text-right text-navy-400 text-xs font-medium px-5 py-3">رقم الحركة</th>
-                <th className="text-right text-navy-400 text-xs font-medium px-5 py-3">الوقت</th>
-                <th className="text-right text-navy-400 text-xs font-medium px-5 py-3">نوع الحركة</th>
-                <th className="text-right text-navy-400 text-xs font-medium px-5 py-3">المبلغ</th>
-                <th className="text-right text-navy-400 text-xs font-medium px-5 py-3">المسؤول</th>
-                <th className="text-right text-navy-400 text-xs font-medium px-5 py-3">الرصيد التراكمي</th>
-              </tr>
-            </thead>
-            <tbody>
-              {movements.map((mv) => {
-                const config = movementTypeConfig[mv.type] ?? movementTypeConfig.petty;
-                const MvIcon = config.icon;
-                return (
-                  <tr key={mv.id} className="border-b border-navy-800/40 hover:bg-navy-800/30 transition-colors">
-                    <td className="px-5 py-3.5">
-                      <span className="text-navy-300 text-sm font-mono">{mv.refNo}</span>
-                    </td>
-                    <td className="px-5 py-3.5">
-                      <span className="text-navy-300 text-sm font-mono flex items-center gap-1">
-                        <Clock className="w-3 h-3" />
-                        {mv.time}
-                      </span>
-                    </td>
-                    <td className="px-5 py-3.5">
-                      <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-lg ${config.bg} ${config.color}`}>
-                        <MvIcon className="w-3.5 h-3.5" />
-                        {mv.typeAr}
-                      </span>
-                    </td>
-                    <td className="px-5 py-3.5">
-                      <span className={`text-sm font-mono font-bold ${mv.amount > 0 ? 'text-success-400' : 'text-danger-400'}`}>
-                        {mv.amount > 0 ? '+' : ''}{formatCurrency(mv.amount)}
-                      </span>
-                    </td>
-                    <td className="px-5 py-3.5">
-                      <span className="text-navy-200 text-sm flex items-center gap-1.5">
-                        <User className="w-3.5 h-3.5 text-navy-400" />
-                        {mv.responsible}
-                      </span>
-                    </td>
-                    <td className="px-5 py-3.5">
-                      <span className="text-white text-sm font-mono font-bold">{formatCurrency(mv.balanceAfter)}</span>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+
+        {movements.length === 0 ? (
+          <div className="p-12 text-center">
+            <div className="w-16 h-16 rounded-2xl bg-navy-800/80 border border-navy-700 flex items-center justify-center mx-auto mb-4 text-navy-400">
+              <Wallet className="w-8 h-8 text-brand-400" />
+            </div>
+            <h4 className="text-white font-bold text-lg mb-1">الخزينة فارغة (0.00 ج.م)</h4>
+            <p className="text-navy-400 text-sm max-w-md mx-auto mb-5">
+              لا توجد حركات نقدية مسجلة بعد. يمكنك تسجيل رصيد افتتاحي أو توريد نقدية لبدء الحركة اليومية.
+            </p>
+            <div className="flex items-center justify-center gap-3">
+              <button
+                onClick={() => {
+                  setDepositType('deposit');
+                  setShowDeposit(true);
+                }}
+                className="btn-primary flex items-center gap-2 text-sm"
+              >
+                <ArrowUpCircle className="w-4 h-4" />
+                إيداع رصيد افتتاحي
+              </button>
+              <button
+                onClick={() => setShowPetty(true)}
+                className="btn-ghost flex items-center gap-2 text-sm text-navy-300"
+              >
+                <ArrowDownCircle className="w-4 h-4" />
+                تسجيل مصروف نثري
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-navy-700/50">
+                  <th className="text-right text-navy-400 text-xs font-medium px-5 py-3">رقم الحركة</th>
+                  <th className="text-right text-navy-400 text-xs font-medium px-5 py-3">الوقت</th>
+                  <th className="text-right text-navy-400 text-xs font-medium px-5 py-3">نوع الحركة</th>
+                  <th className="text-right text-navy-400 text-xs font-medium px-5 py-3">المبلغ</th>
+                  <th className="text-right text-navy-400 text-xs font-medium px-5 py-3">المسؤول</th>
+                  <th className="text-right text-navy-400 text-xs font-medium px-5 py-3">ملاحظات</th>
+                  <th className="text-right text-navy-400 text-xs font-medium px-5 py-3">الرصيد التراكمي</th>
+                </tr>
+              </thead>
+              <tbody>
+                {movements.map((mv) => {
+                  const config = movementTypeConfig[mv.type] ?? movementTypeConfig.petty;
+                  const MvIcon = config.icon;
+                  return (
+                    <tr key={mv.id} className="border-b border-navy-800/40 hover:bg-navy-800/30 transition-colors">
+                      <td className="px-5 py-3.5">
+                        <span className="text-navy-300 text-sm font-mono">{mv.refNo}</span>
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <span className="text-navy-300 text-sm font-mono flex items-center gap-1">
+                          <Clock className="w-3 h-3" />
+                          {mv.time}
+                        </span>
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-lg ${config.bg} ${config.color}`}>
+                          <MvIcon className="w-3.5 h-3.5" />
+                          {mv.typeAr}
+                        </span>
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <span className={`text-sm font-mono font-bold ${mv.amount > 0 ? 'text-success-400' : 'text-danger-400'}`}>
+                          {mv.amount > 0 ? '+' : ''}{formatCurrency(mv.amount)}
+                        </span>
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <span className="text-navy-200 text-sm flex items-center gap-1.5">
+                          <User className="w-3.5 h-3.5 text-navy-400" />
+                          {mv.responsible}
+                        </span>
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <span className="text-navy-400 text-xs">{mv.notes || '—'}</span>
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <span className="text-white text-sm font-mono font-bold">{formatCurrency(mv.balanceAfter)}</span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* Petty Expense Modal */}
@@ -203,41 +379,57 @@ export default function CashDrawer() {
           <div className="space-y-4">
             <div>
               <label className="text-navy-300 text-sm font-medium mb-1.5 block">بند الصرف</label>
-              <select className="input-field">
-                <option value="">اختر بند الصرف</option>
-                <option value="maintenance">صيانة معدات</option>
-                <option value="supplies">مستلزمات نثرية</option>
-                <option value="transport">مواصلات</option>
-                <option value="cleaning">مواد تنظيف</option>
-                <option value="other">أخرى</option>
+              <select
+                value={pettyCategory}
+                onChange={(e) => setPettyCategory(e.target.value)}
+                className="input-field"
+              >
+                <option value="supplies">مستلزمات نثرية وتشغيل</option>
+                <option value="maintenance">صيانة معدات المطعم</option>
+                <option value="transport">مواصلات وانتقالات</option>
+                <option value="cleaning">مواد تنظيف وتعقيم</option>
+                <option value="other">مصروفات أخرى</option>
               </select>
             </div>
             <div>
-              <label className="text-navy-300 text-sm font-medium mb-1.5 block">المبلغ</label>
-              <input type="number" placeholder="0" className="input-field text-center text-lg font-bold" />
+              <label className="text-navy-300 text-sm font-medium mb-1.5 block">المبلغ (ج.م)</label>
+              <input
+                type="number"
+                min="0"
+                step="0.5"
+                value={pettyAmount}
+                onChange={(e) => setPettyAmount(e.target.value)}
+                placeholder="0"
+                className="input-field text-center text-lg font-bold"
+                autoFocus
+              />
             </div>
             <div>
               <label className="text-navy-300 text-sm font-medium mb-1.5 block">الموظف المسؤول</label>
-              <input type="text" placeholder="اسم الموظف" className="input-field" />
+              <input
+                type="text"
+                value={pettyResponsible}
+                onChange={(e) => setPettyResponsible(e.target.value)}
+                placeholder="اسم المستلم أو الموظف"
+                className="input-field"
+              />
             </div>
             <div>
-              <label className="text-navy-300 text-sm font-medium mb-1.5 block">مرفق / إيصال</label>
-              <div className="h-20 rounded-xl bg-navy-900/50 border-2 border-dashed border-navy-700/60 flex flex-col items-center justify-center gap-1 cursor-pointer hover:border-brand-500/50 transition-all">
-                <Upload className="w-5 h-5 text-navy-500" />
-                <span className="text-navy-400 text-xs">رفع صورة الإيصال</span>
-              </div>
-            </div>
-            <div>
-              <label className="text-navy-300 text-sm font-medium mb-1.5 block">ملاحظات</label>
-              <textarea className="input-field min-h-16 resize-none" placeholder="تفاصيل إضافية..." />
+              <label className="text-navy-300 text-sm font-medium mb-1.5 block">ملاحظات / بيان المصروف</label>
+              <textarea
+                value={pettyNotes}
+                onChange={(e) => setPettyNotes(e.target.value)}
+                className="input-field min-h-16 resize-none"
+                placeholder="تفاصيل المصروف..."
+              />
             </div>
           </div>
           <button
-            onClick={() => { setShowPetty(false); showToast('تم تسجيل المصروف النثري', 'success'); }}
+            onClick={handleSavePetty}
             className="btn-primary w-full mt-5 flex items-center justify-center gap-2"
           >
             <Save className="w-5 h-5" />
-            تأكيد الصرف
+            تأكيد الصرف وحفظ الحركة
           </button>
         </Modal>
       )}
@@ -248,28 +440,57 @@ export default function CashDrawer() {
           <div className="space-y-4">
             <div>
               <label className="text-navy-300 text-sm font-medium mb-1.5 block">نوع الإيداع</label>
-              <select className="input-field">
-                <option value="bank">إيداع بنكي</option>
-                <option value="rider">توريد من مندوب</option>
-                <option value="owner">إيداع مالك</option>
-                <option value="other">أخرى</option>
+              <select
+                value={depositType}
+                onChange={(e) => setDepositType(e.target.value)}
+                className="input-field"
+              >
+                <option value="deposit">إيداع افتتاحي بالخزينة</option>
+                <option value="rider_deposit">توريد عهدة نقدية من مندوب</option>
+                <option value="sales">مبيعات نقدية مجمعة</option>
+                <option value="owner">إيداع / تمويل من المالك</option>
+                <option value="other">توريد نقدي آخر</option>
               </select>
             </div>
             <div>
-              <label className="text-navy-300 text-sm font-medium mb-1.5 block">المبلغ</label>
-              <input type="number" placeholder="0" className="input-field text-center text-lg font-bold" />
+              <label className="text-navy-300 text-sm font-medium mb-1.5 block">المبلغ (ج.م)</label>
+              <input
+                type="number"
+                min="0"
+                step="0.5"
+                value={depositAmount}
+                onChange={(e) => setDepositAmount(e.target.value)}
+                placeholder="0"
+                className="input-field text-center text-lg font-bold"
+                autoFocus
+              />
             </div>
             <div>
-              <label className="text-navy-300 text-sm font-medium mb-1.5 block">المرجع</label>
-              <input type="text" placeholder="رقم مرجعي أو اسم المندوب" className="input-field" />
+              <label className="text-navy-300 text-sm font-medium mb-1.5 block">المسؤول / المرجع</label>
+              <input
+                type="text"
+                value={depositRef}
+                onChange={(e) => setDepositRef(e.target.value)}
+                placeholder="رقم مرجعي أو اسم المودع"
+                className="input-field"
+              />
+            </div>
+            <div>
+              <label className="text-navy-300 text-sm font-medium mb-1.5 block">ملاحظات الإيداع</label>
+              <textarea
+                value={depositNotes}
+                onChange={(e) => setDepositNotes(e.target.value)}
+                className="input-field min-h-16 resize-none"
+                placeholder="تفاصيل التوريد..."
+              />
             </div>
           </div>
           <button
-            onClick={() => { setShowDeposit(false); showToast('تم تسجيل التوريد النقدي', 'success'); }}
+            onClick={handleSaveDeposit}
             className="btn-primary w-full mt-5 flex items-center justify-center gap-2"
           >
             <Save className="w-5 h-5" />
-            تأكيد الإيداع
+            تأكيد الإيداع وحفظ الحركة
           </button>
         </Modal>
       )}
@@ -279,27 +500,27 @@ export default function CashDrawer() {
         <Modal title="إقفال اليومية - تقرير Z" icon={FileText} onClose={() => setShowZReport(false)}>
           <div className="space-y-4">
             <div className="bg-navy-900/50 rounded-xl border border-navy-700/40 divide-y divide-navy-700/30">
-              <ReportRow label="رصيد افتتاحي" value={formatCurrency(2000)} />
-              <ReportRow label="إجمالي المقبوضات" value={formatCurrency(cashIn)} success />
-              <ReportRow label="إجمالي المصروفات" value={formatCurrency(cashOut)} danger />
-              <ReportRow label="الرصيد المتوقع" value={formatCurrency(2000 + cashIn - cashOut)} />
-              <ReportRow label="الرصيد الفعلي بالخزينة" value={formatCurrency(currentBalance)} highlight />
-              {currentBalance !== (2000 + cashIn - cashOut) && (
+              <ReportRow label="رصيد افتتاحي" value={formatCurrency(openingDeposit)} />
+              <ReportRow label="إجمالي المقبوضات النقدية" value={formatCurrency(cashIn)} success />
+              <ReportRow label="إجمالي المصروفات النثرية" value={formatCurrency(cashOut)} danger />
+              <ReportRow label="الرصيد المتوقع بالخزينة" value={formatCurrency(cashIn - cashOut)} />
+              <ReportRow label="الرصيد الفعلي التراكمي" value={formatCurrency(currentBalance)} highlight />
+              {currentBalance !== (cashIn - cashOut) && (
                 <div className="px-4 py-3 bg-danger-500/5 border-t border-danger-500/20">
                   <p className="text-danger-400 text-sm flex items-center gap-2">
                     <AlertCircle className="w-4 h-4" />
-                    فرق: {formatCurrency(currentBalance - (2000 + cashIn - cashOut))}
+                    فرق حسابي: {formatCurrency(currentBalance - (cashIn - cashOut))}
                   </p>
                 </div>
               )}
             </div>
             <div>
               <label className="text-navy-300 text-sm font-medium mb-1.5 block">ملاحظات الإقفال</label>
-              <textarea className="input-field min-h-20 resize-none" placeholder="ملاحظات الإقفال..." />
+              <textarea className="input-field min-h-20 resize-none" placeholder="ملاحظات مسؤول الخزينة..." />
             </div>
           </div>
           <button
-            onClick={() => { setShowZReport(false); showToast('تم إقفال اليومية بنجاح', 'success'); }}
+            onClick={() => { setShowZReport(false); showToast('تم إقفال اليومية بنجاح واعتماد الأرصدة', 'success'); }}
             className="btn-primary w-full mt-5 flex items-center justify-center gap-2"
           >
             <CheckCircle2 className="w-5 h-5" />

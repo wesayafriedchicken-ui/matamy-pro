@@ -14,7 +14,6 @@ import {
   mockRiders,
   mockKdsTickets,
   mockShifts,
-  mockTransactions,
 } from '@/data/mockData';
 import { defaultRoles, defaultUsers } from '@/data/rolesPermissionsData';
 import { supabase, checkSupabaseConnection } from '@/lib/supabase';
@@ -40,6 +39,8 @@ import {
   dbAdvanceKdsTicket,
   dbFetchShifts,
   dbFetchTransactions,
+  dbCreateTransaction,
+  dbDeleteTransaction,
   dbFetchRoles,
   dbUpsertRole,
   dbDeleteRole,
@@ -65,6 +66,8 @@ interface AppContextValue {
   kdsTickets: KdsTicket[];
   shifts: Shift[];
   transactions: Transaction[];
+  addTransaction: (tx: Transaction) => Promise<boolean>;
+  deleteTransaction: (id: string) => Promise<boolean>;
   toasts: Toast[];
   dbStatus: DbStatus;
   dbError?: string;
@@ -247,7 +250,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [riders, setRiders] = useState<Rider[]>(mockRiders);
   const [kdsTickets, setKdsTickets] = useState<KdsTicket[]>(mockKdsTickets);
   const [shifts, setShifts] = useState<Shift[]>(mockShifts);
-  const [transactions, setTransactions] = useState<Transaction[]>(mockTransactions);
+  const [transactions, setTransactions] = useState<Transaction[]>(() => {
+    try {
+      const saved = localStorage.getItem('nine_fries_transactions_v2');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch {
+      // ignore
+    }
+    return []; // Completely zeroed out - no fake transactions
+  });
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [dbStatus, setDbStatus] = useState<DbStatus>('checking');
   const [dbError, setDbError] = useState<string | undefined>();
@@ -524,7 +538,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (dbRiders && dbRiders.length > 0) setRiders(dbRiders);
       if (dbTickets && dbTickets.length > 0) setKdsTickets(dbTickets);
       if (dbShiftsList && dbShiftsList.length > 0) setShifts(dbShiftsList);
-      if (dbTxs && dbTxs.length > 0) setTransactions(dbTxs);
+      if (dbTxs) {
+        setTransactions(dbTxs);
+        localStorage.setItem('nine_fries_transactions_v2', JSON.stringify(dbTxs));
+      }
       if (dbRolesList && dbRolesList.length > 0) {
         setRoles(dbRolesList);
         localStorage.setItem('app_roles', JSON.stringify(dbRolesList));
@@ -593,6 +610,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
         async () => {
           const freshInv = await dbFetchInventory();
           if (freshInv) setInventory(freshInv);
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'transactions' },
+        async () => {
+          const freshTxs = await dbFetchTransactions();
+          if (freshTxs) {
+            setTransactions(freshTxs);
+            localStorage.setItem('nine_fries_transactions_v2', JSON.stringify(freshTxs));
+          }
         }
       )
       .on(
@@ -1029,6 +1057,41 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [currentUser, roles],
   );
 
+  // ==========================================
+  // Financial Transactions Handlers
+  // ==========================================
+  const addTransaction = useCallback(
+    async (tx: Transaction): Promise<boolean> => {
+      setTransactions((prev) => {
+        const updated = [tx, ...prev];
+        try {
+          localStorage.setItem('nine_fries_transactions_v2', JSON.stringify(updated));
+        } catch {
+          // ignore
+        }
+        return updated;
+      });
+      return await dbCreateTransaction(tx);
+    },
+    [],
+  );
+
+  const deleteTransaction = useCallback(
+    async (id: string): Promise<boolean> => {
+      setTransactions((prev) => {
+        const updated = prev.filter((t) => t.id !== id);
+        try {
+          localStorage.setItem('nine_fries_transactions_v2', JSON.stringify(updated));
+        } catch {
+          // ignore
+        }
+        return updated;
+      });
+      return await dbDeleteTransaction(id);
+    },
+    [],
+  );
+
   return (
     <AppContext.Provider
       value={{
@@ -1039,6 +1102,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         kdsTickets,
         shifts,
         transactions,
+        addTransaction,
+        deleteTransaction,
         toasts,
         dbStatus,
         dbError,
