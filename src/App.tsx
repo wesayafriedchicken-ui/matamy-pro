@@ -24,11 +24,14 @@ import TaxSettings from '@/pages/TaxSettings';
 import ShiftSchedule from '@/pages/ShiftSchedule';
 import ShiftTasks from '@/pages/ShiftTasks';
 import ShiftPayroll from '@/pages/ShiftPayroll';
+import EmployeesManagement from '@/pages/EmployeesManagement';
+import EmployeeDetail from '@/pages/EmployeeDetail';
 import OrderDetail from '@/pages/OrderDetail';
 import CreateOrder from '@/pages/CreateOrder';
 import Login from '@/pages/Login';
 import RolesManagement from '@/pages/RolesManagement';
 import UsersManagement from '@/pages/UsersManagement';
+import RoleCreateOrEdit from '@/pages/RoleCreateOrEdit';
 
 export default function App() {
   return (
@@ -222,6 +225,22 @@ export default function App() {
               }
             />
             <Route
+              path="/shifts/employees"
+              element={
+                <ProtectedRoute requiredPermission="shifts.manage" pageTitleAr="سجل الموظفين والرواتب">
+                  <EmployeesManagement />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/shifts/employees/:employeeId"
+              element={
+                <ProtectedRoute requiredPermission="shifts.manage" pageTitleAr="ملف الموظف وسجل الورديات">
+                  <EmployeeDetail />
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/shifts/tasks"
               element={
                 <ProtectedRoute requiredPermission="shifts.manage" pageTitleAr="مهام الشيفت والتسليم">
@@ -250,6 +269,22 @@ export default function App() {
               element={
                 <ProtectedRoute requiredPermission="roles.manage" pageTitleAr="إدارة الأدوار والصلاحيات">
                   <RolesManagement />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/users/roles/new"
+              element={
+                <ProtectedRoute requiredPermission="roles.manage" pageTitleAr="إنشاء دور وظيفي جديد ومصفوفة الصلاحيات">
+                  <RoleCreateOrEdit />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/users/roles/:roleId"
+              element={
+                <ProtectedRoute requiredPermission="roles.manage" pageTitleAr="تفاصيل وتعديل الدور الوظيفي">
+                  <RoleCreateOrEdit />
                 </ProtectedRoute>
               }
             />

@@ -113,6 +113,7 @@ const navItems: NavItem[] = [
     active: true,
     subItems: [
       { id: 'shift-schedule', labelAr: 'الجدولة والحضور', path: '/shifts/schedule', icon: CalendarClock, requiredPermission: 'shifts.manage' },
+      { id: 'shift-employees', labelAr: 'سجل الموظفين والرواتب', path: '/shifts/employees', icon: Users, requiredPermission: 'shifts.manage' },
       { id: 'shift-tasks', labelAr: 'المهام وتسليم الشيفت', path: '/shifts/tasks', icon: CheckSquare, requiredPermission: 'shifts.manage' },
       { id: 'shift-payroll', labelAr: 'الرواتب والساعات', path: '/shifts/payroll', icon: Wallet, requiredPermission: 'shifts.manage' },
     ],

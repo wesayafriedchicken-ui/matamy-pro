@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import {
   ShieldCheck,
   Shield,
@@ -8,11 +8,12 @@ import {
   Edit2,
   Trash2,
   AlertTriangle,
-  X,
   Search,
   Lock,
   Sparkles,
   Info,
+  ExternalLink,
+  Copy,
   Check,
   LayoutDashboard,
   ClipboardList,
@@ -49,19 +50,11 @@ const MODULE_ICONS: Record<PermissionModule, React.ComponentType<{ className?: s
 export default function RolesManagement() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { roles, users, addRole, updateRole, deleteRole, showToast } = useApp();
+  const { roles, users, deleteRole, showToast } = useApp();
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingRole, setEditingRole] = useState<Role | null>(null);
   const [deleteConfirmRole, setDeleteConfirmRole] = useState<Role | null>(null);
-
-  // Form State
-  const [formNameAr, setFormNameAr] = useState('');
-  const [formNameEn, setFormNameEn] = useState('');
-  const [formDescriptionAr, setFormDescriptionAr] = useState('');
-  const [formColor, setFormColor] = useState<Role['color']>('brand');
-  const [formPermissions, setFormPermissions] = useState<string[]>([]);
+  const [copiedRoleId, setCopiedRoleId] = useState<string | null>(null);
 
   // Filtered Roles
   const filteredRoles = useMemo(() => {
@@ -71,96 +64,19 @@ export default function RolesManagement() {
       (r) =>
         r.nameAr.toLowerCase().includes(q) ||
         r.name.toLowerCase().includes(q) ||
-        r.descriptionAr.toLowerCase().includes(q)
+        r.descriptionAr.toLowerCase().includes(q) ||
+        r.id.toLowerCase().includes(q)
     );
   }, [roles, searchQuery]);
 
-  // Open modal for new role
-  const handleOpenCreateModal = () => {
-    setEditingRole(null);
-    setFormNameAr('');
-    setFormNameEn('');
-    setFormDescriptionAr('');
-    setFormColor('brand');
-    setFormPermissions([]);
-    setIsModalOpen(true);
-  };
-
-  // Open modal for editing existing role
-  const handleOpenEditModal = (role: Role) => {
-    setEditingRole(role);
-    setFormNameAr(role.nameAr);
-    setFormNameEn(role.name);
-    setFormDescriptionAr(role.descriptionAr);
-    setFormColor(role.color || 'brand');
-    setFormPermissions([...role.permissions]);
-    setIsModalOpen(true);
-  };
-
-  // Toggle single permission
-  const handleTogglePermission = (code: string) => {
-    setFormPermissions((prev) =>
-      prev.includes(code) ? prev.filter((c) => c !== code) : [...prev, code]
-    );
-  };
-
-  // Toggle all permissions for a specific module
-  const handleToggleModulePermissions = (module: PermissionModule) => {
-    const moduleCodes = SYSTEM_PERMISSIONS.filter((p) => p.module === module).map((p) => p.code);
-    const allSelected = moduleCodes.every((code) => formPermissions.includes(code));
-
-    if (allSelected) {
-      setFormPermissions((prev) => prev.filter((code) => !moduleCodes.includes(code)));
-    } else {
-      setFormPermissions((prev) => Array.from(new Set([...prev, ...moduleCodes])));
-    }
-  };
-
-  // Select all permissions
-  const handleSelectAllPermissions = () => {
-    if (formPermissions.length === ALL_PERMISSION_CODES.length) {
-      setFormPermissions([]);
-    } else {
-      setFormPermissions([...ALL_PERMISSION_CODES]);
-    }
-  };
-
-  // Save role handler
-  const handleSaveRole = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formNameAr.trim()) {
-      showToast('يرجى كتابة المسمى الوظيفي للدور بالعربية', 'warning');
-      return;
-    }
-
-    if (editingRole) {
-      const updated: Role = {
-        ...editingRole,
-        name: formNameEn.trim() || formNameAr.trim(),
-        nameAr: formNameAr.trim(),
-        description: formDescriptionAr.trim(),
-        descriptionAr: formDescriptionAr.trim(),
-        color: formColor,
-        permissions: formPermissions,
-        updatedAt: new Date().toISOString(),
-      };
-      await updateRole(updated);
-    } else {
-      const newRole: Role = {
-        id: `role-${Date.now()}`,
-        name: formNameEn.trim() || formNameAr.trim(),
-        nameAr: formNameAr.trim(),
-        description: formDescriptionAr.trim(),
-        descriptionAr: formDescriptionAr.trim(),
-        color: formColor,
-        permissions: formPermissions,
-        isSystem: false,
-        createdAt: new Date().toISOString(),
-      };
-      await addRole(newRole);
-    }
-
-    setIsModalOpen(false);
+  // Copy role route path to clipboard
+  const handleCopyRoute = (e: React.MouseEvent, roleId: string) => {
+    e.stopPropagation();
+    const route = `/users/roles/${roleId}`;
+    navigator.clipboard.writeText(route);
+    setCopiedRoleId(roleId);
+    showToast(`تم نسخ المسار: ${route}`, 'info');
+    setTimeout(() => setCopiedRoleId(null), 2000);
   };
 
   // Delete role handler
@@ -184,11 +100,11 @@ export default function RolesManagement() {
       >
         <button
           type="button"
-          onClick={handleOpenCreateModal}
+          onClick={() => navigate('/users/roles/new')}
           className="btn-primary flex items-center gap-2 cursor-pointer shadow-lg shadow-brand-500/20"
         >
           <Plus className="w-4 h-4" />
-          <span>إضافة دور وظيفي جديد</span>
+          <span>إنشاء دور وظيفي جديد</span>
         </button>
       </PageHeader>
 
@@ -259,7 +175,7 @@ export default function RolesManagement() {
           <Search className="w-4 h-4 text-navy-400 absolute right-3.5 top-1/2 -translate-y-1/2" />
           <input
             type="text"
-            placeholder="بحث في أسماء الأدوار أو الوصف..."
+            placeholder="بحث في أسماء الأدوار، المعرف أو الوصف..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="input-field pr-10 text-xs w-full"
@@ -267,8 +183,8 @@ export default function RolesManagement() {
         </div>
 
         <div className="text-xs text-navy-400 flex items-center gap-2 w-full sm:w-auto justify-end">
-          <Info className="w-3.5 h-3.5 text-navy-400" />
-          <span>يتم تطبيق الصلاحيات فورياً على كل شاشات وعمليات المطعم</span>
+          <Info className="w-3.5 h-3.5 text-navy-400 shrink-0" />
+          <span>كل دور وظيفي يمتلك مساراً خاصاً به في النظام (مثال: /users/roles/:roleId)</span>
         </div>
       </div>
 
@@ -278,11 +194,12 @@ export default function RolesManagement() {
           const assignedUsers = users.filter((u) => u.roleId === role.id);
           const permissionsCount = role.permissions.length;
           const isFullAdmin = role.id === 'role-admin' || permissionsCount === ALL_PERMISSION_CODES.length;
+          const roleRoute = `/users/roles/${role.id}`;
 
           return (
             <div
               key={role.id}
-              className="glass-card p-5 border border-navy-700/60 hover:border-navy-600 transition-all flex flex-col justify-between group shadow-xl"
+              className="glass-card p-5 border border-navy-700/60 hover:border-brand-500/40 transition-all flex flex-col justify-between group shadow-xl"
             >
               <div>
                 {/* Header */}
@@ -292,9 +209,13 @@ export default function RolesManagement() {
                       <Shield className="w-5 h-5" />
                     </div>
                     <div>
-                      <h3 className="text-white font-bold text-base group-hover:text-brand-400 transition-colors">
-                        {role.nameAr}
-                      </h3>
+                      <Link
+                        to={roleRoute}
+                        className="text-white font-bold text-base group-hover:text-brand-400 transition-colors flex items-center gap-1.5"
+                      >
+                        <span>{role.nameAr}</span>
+                        <ExternalLink className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition-opacity text-brand-400" />
+                      </Link>
                       <p className="text-navy-400 text-xs font-mono">{role.name}</p>
                     </div>
                   </div>
@@ -311,6 +232,28 @@ export default function RolesManagement() {
                   )}
                 </div>
 
+                {/* Dedicated Route URL Badge */}
+                <div className="mb-3 p-2 rounded-lg bg-navy-900/80 border border-navy-700/60 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5 overflow-hidden">
+                    <span className="text-[10px] text-navy-400 shrink-0">المسار الخاص:</span>
+                    <span className="text-[11px] font-mono text-cyan-400 truncate" dir="ltr">
+                      {roleRoute}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={(e) => handleCopyRoute(e, role.id)}
+                    className="p-1 rounded hover:bg-navy-700 text-navy-400 hover:text-white transition-colors shrink-0"
+                    title="نسخ مسار هذا الدور"
+                  >
+                    {copiedRoleId === role.id ? (
+                      <Check className="w-3.5 h-3.5 text-emerald-400" />
+                    ) : (
+                      <Copy className="w-3.5 h-3.5" />
+                    )}
+                  </button>
+                </div>
+
                 {/* Description */}
                 <p className="text-navy-300 text-xs line-clamp-2 mb-4 leading-relaxed min-h-[34px]">
                   {role.descriptionAr || 'لا يوجد وصف مدخل لهذا الدور'}
@@ -325,7 +268,8 @@ export default function RolesManagement() {
                         <span className="text-emerald-400">كامل الصلاحيات (100%)</span>
                       ) : (
                         <span>
-                          {permissionsCount} <span className="text-navy-500 font-normal">/ {ALL_PERMISSION_CODES.length}</span>
+                          {permissionsCount}{' '}
+                          <span className="text-navy-500 font-normal">/ {ALL_PERMISSION_CODES.length}</span>
                         </span>
                       )}
                     </span>
@@ -369,11 +313,11 @@ export default function RolesManagement() {
               <div className="flex items-center justify-between gap-2 pt-2">
                 <button
                   type="button"
-                  onClick={() => handleOpenEditModal(role)}
+                  onClick={() => navigate(roleRoute)}
                   className="flex-1 btn-ghost py-2 text-xs flex items-center justify-center gap-1.5 cursor-pointer font-bold border border-navy-700/80 hover:border-brand-500/40 hover:text-brand-400"
                 >
                   <Edit2 className="w-3.5 h-3.5" />
-                  <span>تعديل الصلاحيات</span>
+                  <span>تعديل الصلاحيات والميزات</span>
                 </button>
 
                 {!role.isSystem ? (
@@ -400,196 +344,6 @@ export default function RolesManagement() {
       </div>
 
       {/* ==================================================== */}
-      {/* Add / Edit Role Modal (Permission Matrix Editor) */}
-      {/* ==================================================== */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-navy-950/80 backdrop-blur-md animate-fade-in">
-          <div className="glass-card w-full max-w-4xl max-h-[90vh] flex flex-col border border-navy-700 shadow-2xl overflow-hidden rounded-3xl animate-scale-in">
-            {/* Modal Header */}
-            <div className="p-6 border-b border-navy-700/60 flex items-center justify-between bg-navy-900/60">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-brand-500/20 text-brand-400 flex items-center justify-center">
-                  <ShieldCheck className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="text-white font-bold text-lg">
-                    {editingRole ? `تعديل صلاحيات الدور: ${editingRole.nameAr}` : 'إنشاء دور وظيفي جديد'}
-                  </h3>
-                  <p className="text-navy-400 text-xs">حدد الصلاحيات المسموح بها والموديلات التي يمكن الوصول إليها</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsModalOpen(false)}
-                className="w-8 h-8 rounded-lg bg-navy-800 hover:bg-navy-700 text-navy-400 hover:text-white flex items-center justify-center transition-colors"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            {/* Modal Scrollable Body */}
-            <form onSubmit={handleSaveRole} className="flex-1 overflow-y-auto p-6 space-y-6">
-              {/* Role General Info Fields */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 rounded-2xl bg-navy-900/40 border border-navy-800/80">
-                <div>
-                  <label className="block text-xs font-semibold text-navy-200 mb-1.5">
-                    اسم الدور باللغة العربية <span className="text-danger-400">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="مثال: مشرف مطبخ / كاشير متقدم"
-                    value={formNameAr}
-                    onChange={(e) => setFormNameAr(e.target.value)}
-                    className="input-field text-sm"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-navy-200 mb-1.5">
-                    المسمى بالإنجليزية (اختياري)
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="مثال: Kitchen Supervisor"
-                    value={formNameEn}
-                    onChange={(e) => setFormNameEn(e.target.value)}
-                    className="input-field text-sm"
-                    dir="ltr"
-                  />
-                </div>
-
-                <div className="md:col-span-2">
-                  <label className="block text-xs font-semibold text-navy-200 mb-1.5">
-                    وصف مسؤوليات وصلاحيات هذا الدور
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="وصف مختصر لطبيعة العمل والصلاحيات المسندة لهذا الدور"
-                    value={formDescriptionAr}
-                    onChange={(e) => setFormDescriptionAr(e.target.value)}
-                    className="input-field text-sm"
-                  />
-                </div>
-              </div>
-
-              {/* Permission Matrix Header */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
-                <div>
-                  <h4 className="text-white font-bold text-sm flex items-center gap-2">
-                    <Shield className="w-4 h-4 text-brand-400" />
-                    <span>مصفوفة الصلاحيات المتاحة ({formPermissions.length} محددة من {ALL_PERMISSION_CODES.length})</span>
-                  </h4>
-                  <p className="text-navy-400 text-xs mt-0.5">قم باختيار الأقسام والميزات المسموح لهذا الدور بتنفيذها</p>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={handleSelectAllPermissions}
-                  className="px-3 py-1.5 rounded-xl bg-navy-800 hover:bg-navy-700 text-xs font-semibold text-navy-200 hover:text-white transition-colors border border-navy-700/60 self-start sm:self-auto cursor-pointer"
-                >
-                  {formPermissions.length === ALL_PERMISSION_CODES.length ? 'إلغاء تحديد الكل' : 'تحديد كل الصلاحيات'}
-                </button>
-              </div>
-
-              {/* Grouped Permissions by Module */}
-              <div className="space-y-4">
-                {(Object.keys(PERMISSION_MODULE_LABELS) as PermissionModule[]).map((moduleKey) => {
-                  const modInfo = PERMISSION_MODULE_LABELS[moduleKey];
-                  const ModIcon = MODULE_ICONS[moduleKey];
-                  const modulePerms = SYSTEM_PERMISSIONS.filter((p) => p.module === moduleKey);
-                  const selectedCount = modulePerms.filter((p) => formPermissions.includes(p.code)).length;
-                  const isAllSelected = selectedCount === modulePerms.length;
-
-                  return (
-                    <div
-                      key={moduleKey}
-                      className="p-4 rounded-2xl bg-navy-900/60 border border-navy-800/80 hover:border-navy-700/80 transition-colors"
-                    >
-                      {/* Module Title and Select All for this module */}
-                      <div className="flex items-center justify-between pb-3 mb-3 border-b border-navy-800/80">
-                        <div className="flex items-center gap-2.5">
-                          <div className="w-7 h-7 rounded-lg bg-navy-800 text-brand-400 flex items-center justify-center">
-                            <ModIcon className="w-4 h-4" />
-                          </div>
-                          <div>
-                            <span className="text-white font-bold text-xs">{modInfo.labelAr}</span>
-                            <span className="text-[11px] text-navy-400 mr-2">({modInfo.labelEn})</span>
-                          </div>
-                        </div>
-
-                        <button
-                          type="button"
-                          onClick={() => handleToggleModulePermissions(moduleKey)}
-                          className={`text-xs px-2.5 py-1 rounded-lg font-semibold transition-colors ${
-                            isAllSelected
-                              ? 'bg-brand-500/15 text-brand-400 border border-brand-500/30'
-                              : 'text-navy-400 hover:text-white hover:bg-navy-800'
-                          }`}
-                        >
-                          {isAllSelected ? 'محدد بالكامل' : `تحديد القسم (${selectedCount}/${modulePerms.length})`}
-                        </button>
-                      </div>
-
-                      {/* Permissions List in Grid */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        {modulePerms.map((perm) => {
-                          const isChecked = formPermissions.includes(perm.code);
-                          return (
-                            <label
-                              key={perm.code}
-                              className={`p-3 rounded-xl border flex items-start gap-3 cursor-pointer transition-all select-none ${
-                                isChecked
-                                  ? 'bg-brand-500/10 border-brand-500/30 text-white'
-                                  : 'bg-navy-950/40 border-navy-800 hover:border-navy-700 text-navy-300'
-                              }`}
-                            >
-                              <input
-                                type="checkbox"
-                                checked={isChecked}
-                                onChange={() => handleTogglePermission(perm.code)}
-                                className="mt-0.5 w-4 h-4 rounded border-navy-700 bg-navy-900 text-brand-500 focus:ring-brand-500/30 shrink-0"
-                              />
-                              <div className="overflow-hidden">
-                                <p className={`text-xs font-bold ${isChecked ? 'text-brand-300' : 'text-white'}`}>
-                                  {perm.nameAr}
-                                </p>
-                                <p className="text-[11px] text-navy-400 mt-0.5 leading-snug">
-                                  {perm.descriptionAr}
-                                </p>
-                              </div>
-                            </label>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Modal Footer Controls */}
-              <div className="pt-4 border-t border-navy-800 flex items-center justify-end gap-3 sticky bottom-0 bg-navy-900/90 py-3 backdrop-blur-md">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="btn-ghost px-5 py-2.5 text-xs font-bold"
-                >
-                  إلغاء
-                </button>
-                <button
-                  type="submit"
-                  className="btn-primary px-6 py-2.5 text-xs font-bold flex items-center gap-2 cursor-pointer shadow-lg shadow-brand-500/20"
-                >
-                  <Check className="w-4 h-4" />
-                  <span>حفظ الصلاحيات والدور</span>
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* ==================================================== */}
       {/* Delete Confirmation Modal */}
       {/* ==================================================== */}
       {deleteConfirmRole && (
@@ -603,7 +357,7 @@ export default function RolesManagement() {
               تأكيد حذف الدور "{deleteConfirmRole.nameAr}"؟
             </h3>
             <p className="text-navy-300 text-xs text-center leading-relaxed mb-6">
-              هل أنت متأكد من رغبتك في حذف هذا الدور المخصص من النظام؟ سيتم مسح مصفوفة الصلاحيات المرتبطة به بشكل نهائي.
+              هل أنت متأكد من رغبتك في حذف هذا الدور المخصص من النظام؟ سيتم مسح مصفوفة الصلاحيات المرتبطة به ومساره الخاص ({`/users/roles/${deleteConfirmRole.id}`}) بشكل نهائي.
             </p>
 
             <div className="flex items-center gap-3">

@@ -1,296 +1,416 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useApp } from '@/context/AppContext';
+import type { PayrollRecord } from '@/types';
 import {
   Wallet, CalendarClock, CheckSquare, Users, Clock,
-  TrendingUp, TrendingDown, DollarSign, X, Receipt,
-  CheckCircle2, Download, Briefcase,
+  DollarSign, X, Receipt, CheckCircle2, Download,
+  ExternalLink, Plus, Check,
 } from 'lucide-react';
 import { formatCurrency } from '@/utils/helpers';
 import PageHeader from '@/components/shared/PageHeader';
 import StatCard from '@/components/shared/StatCard';
 
-interface PayrollRecord {
-  id: string;
-  employeeNameAr: string;
-  roleAr: string;
-  baseSalary: number;
-  totalHours: number;
-  overtimeHours: number;
-  deductions: number;
-  incentives: number;
-  paid: boolean;
-}
-
-const mockPayroll: PayrollRecord[] = [
-  { id: 'p1', employeeNameAr: 'أحمد علي', roleAr: 'طباخ', baseSalary: 8000, totalHours: 176, overtimeHours: 12, deductions: 0, incentives: 500, paid: false },
-  { id: 'p2', employeeNameAr: 'سارة حسن', roleAr: 'كاشير', baseSalary: 6000, totalHours: 168, overtimeHours: 8, deductions: 200, incentives: 300, paid: false },
-  { id: 'p3', employeeNameAr: 'محمود إبراهيم', roleAr: 'جرسون', baseSalary: 5000, totalHours: 160, overtimeHours: 0, deductions: 0, incentives: 200, paid: true },
-  { id: 'p4', employeeNameAr: 'فاطمة نور', roleAr: 'مساعد مطبخ', baseSalary: 4500, totalHours: 176, overtimeHours: 4, deductions: 0, incentives: 150, paid: false },
-  { id: 'p5', employeeNameAr: 'خالد سامي', roleAr: 'مندوب', baseSalary: 5500, totalHours: 168, overtimeHours: 16, deductions: 100, incentives: 400, paid: false },
-  { id: 'p6', employeeNameAr: 'عمر يوسف', roleAr: 'مدير', baseSalary: 12000, totalHours: 160, overtimeHours: 0, deductions: 0, incentives: 1000, paid: true },
-];
-
-const overtimeRate = 50;
-const hourRate = (base: number) => base / 176;
-
 export default function ShiftPayroll() {
-  const { showToast } = useApp();
-  const [payroll, setPayroll] = useState<PayrollRecord[]>(mockPayroll);
-  const [period, setPeriod] = useState('month');
+  const { employees, shifts, payrollRecords, disbursePayroll } = useApp();
+
+  const [period, setPeriod] = useState<'month' | 'week'>('month');
   const [selectedMonth, setSelectedMonth] = useState('2026-09');
   const [payRecord, setPayRecord] = useState<PayrollRecord | null>(null);
   const [showReceipt, setShowReceipt] = useState(false);
 
-  const netPayable = (r: PayrollRecord) =>
-    r.baseSalary + r.overtimeHours * overtimeRate + r.incentives - r.deductions;
+  // Dynamic Payroll calculation based on actual Employees + Shifts
+  const dynamicPayroll = useMemo(() => {
+    return employees.map((emp) => {
+      // Find shifts for this employee in selected month
+      const empShifts = shifts.filter((s) => {
+        const matchesEmployee = s.employeeId === emp.id || s.employeeNameAr === emp.nameAr;
+        const matchesMonth = s.date.startsWith(selectedMonth);
+        return matchesEmployee && matchesMonth;
+      });
 
-  const totalPayroll = payroll.reduce((s, r) => s + netPayable(r), 0);
-  const totalHours = payroll.reduce((s, r) => s + r.totalHours, 0);
-  const totalOvertime = payroll.reduce((s, r) => s + r.overtimeHours, 0);
-  const totalDeductions = payroll.reduce((s, r) => s + r.deductions, 0);
-  const paidCount = payroll.filter((r) => r.paid).length;
+      // Calculate hours from shifts or fallback to contract standard
+      const recordedHours = empShifts.reduce((acc, s) => acc + (s.hoursWorked || 0), 0);
+      const totalHours = recordedHours > 0 ? recordedHours : (emp.contractType === 'full_time' ? 176 : 80);
+      const overtimeHours = empShifts.reduce((acc, s) => acc + (s.overtimeHours || 0), 0);
 
-  const handlePay = (record: PayrollRecord) => {
-    setPayroll((prev) => prev.map((r) => r.id === record.id ? { ...r, paid: true } : r));
-    setPayRecord(record);
+      // Check if existing saved record exists in database
+      const savedRecord = payrollRecords.find(
+        (r) => (r.employeeId === emp.id || r.employeeNameAr === emp.nameAr) && r.period === selectedMonth
+      );
+
+      const baseSalary = emp.baseSalary || 0;
+      const incentives = savedRecord ? savedRecord.incentives : (emp.monthlyIncentives || 0);
+      const deductions = savedRecord ? savedRecord.deductions : 0;
+      const overtimePay = overtimeHours * (emp.overtimeRate || 50);
+      const netSalary = Math.max(0, baseSalary + overtimePay + incentives - deductions);
+      const paid = savedRecord ? savedRecord.paid : false;
+
+      const record: PayrollRecord = {
+        id: savedRecord ? savedRecord.id : `payroll-${emp.id}-${selectedMonth}`,
+        employeeId: emp.id,
+        employeeNameAr: emp.nameAr,
+        roleAr: emp.roleAr,
+        period: selectedMonth,
+        baseSalary,
+        totalHours,
+        overtimeHours,
+        deductions,
+        incentives,
+        netSalary,
+        paid,
+        paidAt: savedRecord?.paidAt,
+        paymentMethod: savedRecord?.paymentMethod || 'cash',
+      };
+
+      return record;
+    });
+  }, [employees, shifts, payrollRecords, selectedMonth]);
+
+  const totalPayroll = dynamicPayroll.reduce((s, r) => s + r.netSalary, 0);
+  const totalHours = dynamicPayroll.reduce((s, r) => s + r.totalHours, 0);
+  const totalOvertime = dynamicPayroll.reduce((s, r) => s + r.overtimeHours, 0);
+  const totalDeductions = dynamicPayroll.reduce((s, r) => s + r.deductions, 0);
+  const paidCount = dynamicPayroll.filter((r) => r.paid).length;
+
+  const handlePay = async (record: PayrollRecord) => {
+    await disbursePayroll(record);
+    setPayRecord({ ...record, paid: true, paidAt: new Date().toISOString() });
     setShowReceipt(true);
-    showToast(`تم اعتماد صرف راتب ${record.employeeNameAr}`, 'success');
   };
 
   const months = [
     { value: '2026-09', label: 'سبتمبر 2026' },
     { value: '2026-08', label: 'أغسطس 2026' },
     { value: '2026-07', label: 'يوليو 2026' },
+    { value: '2026-06', label: 'يونيو 2026' },
   ];
 
   return (
-    <div className="animate-fade-in">
-      <PageHeader title="الورديات والمهام" description="الرواتب وساعات العمل والاستقطاعات" />
+    <div className="animate-fade-in pb-12">
+      <PageHeader
+        title="الورديات والمهام"
+        subtitle="كشف الرواتب وساعات العمل والاستقطاعات المربوطة بسجل الموظفين والورديات"
+      />
 
-      {/* Sub-route nav */}
-      <div className="flex items-center gap-2 mb-6 p-1.5 bg-navy-800/60 rounded-2xl w-fit">
-        <Link to="/shifts/schedule" className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium text-navy-300 hover:text-white transition-all">
+      {/* Sub-Route Navigation (4 Dedicated Tabs) */}
+      <div className="flex items-center gap-2 mb-6 p-1.5 bg-navy-800/60 rounded-2xl w-fit flex-wrap border border-navy-700/60">
+        <Link
+          to="/shifts/schedule"
+          className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium text-navy-300 hover:text-white transition-all"
+        >
           <CalendarClock className="w-4 h-4" />
-          الجدولة والحضور
+          <span>الجدولة والحضور</span>
         </Link>
-        <Link to="/shifts/tasks" className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium text-navy-300 hover:text-white transition-all">
+
+        <Link
+          to="/shifts/employees"
+          className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium text-navy-300 hover:text-white transition-all"
+        >
+          <Users className="w-4 h-4" />
+          <span>سجل الموظفين ({employees.length})</span>
+        </Link>
+
+        <Link
+          to="/shifts/tasks"
+          className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium text-navy-300 hover:text-white transition-all"
+        >
           <CheckSquare className="w-4 h-4" />
-          المهام وتسليم الشيفت
+          <span>المهام وتسليم الشيفت</span>
         </Link>
+
         <span className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold bg-brand-500 text-white shadow-lg shadow-brand-500/20">
           <Wallet className="w-4 h-4" />
-          الرواتب والساعات
+          <span>الرواتب والساعات</span>
         </span>
       </div>
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <StatCard icon={DollarSign} label="إجمالي الرواتب المستحقة" value={formatCurrency(totalPayroll)} color="brand" />
-        <StatCard icon={Clock} label="إجمالي ساعات العمل" value={`${totalHours} س`} color="blue" />
-        <StatCard icon={TrendingUp} label="ساعات إضافية" value={`${totalOvertime} س`} color="success" />
-        <StatCard icon={TrendingDown} label="استقطاعات" value={formatCurrency(totalDeductions)} color="danger" />
+        <StatCard
+          icon={DollarSign}
+          label="إجمالي الرواتب المستحقة"
+          value={formatCurrency(totalPayroll)}
+          color="brand"
+        />
+        <StatCard
+          icon={Clock}
+          label="إجمالي ساعات العمل"
+          value={`${totalHours} س`}
+          color="blue"
+        />
+        <StatCard
+          icon={Clock}
+          label="ساعات إضافية"
+          value={`${totalOvertime} س`}
+          color="success"
+        />
+        <StatCard
+          icon={DollarSign}
+          label="استقطاعات وجزاءات"
+          value={formatCurrency(totalDeductions)}
+          color="danger"
+        />
       </div>
 
-      {/* Filters */}
-      <div className="flex items-center gap-3 mb-5">
-        <div className="flex items-center gap-1 p-1 bg-navy-800/60 rounded-xl">
-          <button onClick={() => setPeriod('month')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${period === 'month' ? 'bg-brand-500 text-white' : 'text-navy-400 hover:text-white'}`}>
-            شهري
-          </button>
-          <button onClick={() => setPeriod('week')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${period === 'week' ? 'bg-brand-500 text-white' : 'text-navy-400 hover:text-white'}`}>
-            أسبوعي
-          </button>
-        </div>
-        <select
-          value={selectedMonth}
-          onChange={(e) => setSelectedMonth(e.target.value)}
-          className="input-field w-auto"
-        >
-          {months.map((m) => (
-            <option key={m.value} value={m.value}>{m.label}</option>
-          ))}
-        </select>
-        <span className="text-navy-400 text-sm mr-auto">
-          {paidCount} من {payroll.length} تم صرفها
+      {/* Filter and Period Selection */}
+      <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
+        <span className="text-xs text-navy-400">
+          تم صرف واعتماد رواتب ({paidCount} من {dynamicPayroll.length}) موظف
         </span>
+
+        <div className="flex items-center gap-2">
+          <select
+            value={selectedMonth}
+            onChange={(e) => setSelectedMonth(e.target.value)}
+            className="input-field text-xs py-2 bg-navy-900 border-navy-700 font-mono"
+          >
+            {months.map((m) => (
+              <option key={m.value} value={m.value}>
+                {m.label}
+              </option>
+            ))}
+          </select>
+
+          <div className="flex items-center gap-1 p-1 bg-navy-800/60 rounded-xl border border-navy-700/60">
+            <button
+              onClick={() => setPeriod('month')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                period === 'month' ? 'bg-brand-500 text-white' : 'text-navy-400 hover:text-white'
+              }`}
+            >
+              شهري
+            </button>
+            <button
+              onClick={() => setPeriod('week')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                period === 'week' ? 'bg-brand-500 text-white' : 'text-navy-400 hover:text-white'
+              }`}
+            >
+              أسبوعي
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* Payroll Table */}
-      <div className="glass-card overflow-hidden">
-        <div className="px-5 py-4 border-b border-navy-700/50">
-          <h3 className="text-white font-bold text-base flex items-center gap-2">
-            <Users className="w-5 h-5 text-brand-400" />
-            كشف الرواتب - {months.find((m) => m.value === selectedMonth)?.label}
-          </h3>
+      {dynamicPayroll.length === 0 ? (
+        <div className="glass-card p-12 text-center border border-dashed border-navy-700/80 rounded-2xl mb-6">
+          <Wallet className="w-12 h-12 text-navy-500 mx-auto mb-3" />
+          <h3 className="text-white font-bold text-base mb-1">لا توجد بيانات موظفين مسجلة لحساب الرواتب</h3>
+          <p className="text-navy-400 text-xs max-w-sm mx-auto mb-5">
+            يقرأ كشف الرواتب تلقائياً من صفحة سجل الموظفين بناءً على الراتب الأساسي وساعات الورديات المسجلة.
+          </p>
+          <Link
+            to="/shifts/employees"
+            className="btn-primary py-2 px-4 text-xs font-bold inline-flex items-center gap-1.5 shadow-lg shadow-brand-500/20"
+          >
+            <Plus className="w-4 h-4" />
+            <span>إضافة موظفين في سجل الموظفين</span>
+          </Link>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-navy-700/50">
-                <th className="text-right text-navy-400 text-xs font-medium px-5 py-3">الموظف والوظيفة</th>
-                <th className="text-right text-navy-400 text-xs font-medium px-5 py-3">الراتب الأساسي</th>
-                <th className="text-right text-navy-400 text-xs font-medium px-5 py-3">ساعات العمل</th>
-                <th className="text-right text-navy-400 text-xs font-medium px-5 py-3">ساعات إضافية</th>
-                <th className="text-right text-navy-400 text-xs font-medium px-5 py-3">استقطاعات</th>
-                <th className="text-right text-navy-400 text-xs font-medium px-5 py-3">بدلات ومكافآت</th>
-                <th className="text-right text-navy-400 text-xs font-medium px-5 py-3">صافي الراتب</th>
-                <th className="text-center text-navy-400 text-xs font-medium px-5 py-3">إجراء</th>
-              </tr>
-            </thead>
-            <tbody>
-              {payroll.map((record) => {
-                const net = netPayable(record);
-                const overtimePay = record.overtimeHours * overtimeRate;
-                return (
-                  <tr key={record.id} className="border-b border-navy-800/40 hover:bg-navy-800/30 transition-colors">
-                    <td className="px-5 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-navy-600 to-navy-700 flex items-center justify-center text-white font-bold text-sm">
-                          {record.employeeNameAr.charAt(0)}
-                        </div>
-                        <div>
-                          <p className="text-white text-sm font-medium">{record.employeeNameAr}</p>
-                          <p className="text-navy-400 text-xs flex items-center gap-1">
-                            <Briefcase className="w-3 h-3" />
-                            {record.roleAr}
-                          </p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-5 py-4">
-                      <span className="text-white text-sm font-mono font-bold">{formatCurrency(record.baseSalary)}</span>
-                    </td>
-                    <td className="px-5 py-4">
-                      <span className="text-navy-200 text-sm font-mono">{record.totalHours} س</span>
-                      <p className="text-navy-500 text-xs font-mono">{Math.round(hourRate(record.baseSalary))} ج/س</p>
-                    </td>
-                    <td className="px-5 py-4">
-                      {record.overtimeHours > 0 ? (
-                        <div>
-                          <span className="text-success-400 text-sm font-mono font-bold">{record.overtimeHours} س</span>
-                          <p className="text-navy-500 text-xs font-mono">+{formatCurrency(overtimePay)}</p>
-                        </div>
-                      ) : (
-                        <span className="text-navy-500 text-sm">—</span>
-                      )}
-                    </td>
-                    <td className="px-5 py-4">
-                      {record.deductions > 0 ? (
-                        <span className="text-danger-400 text-sm font-mono font-bold">-{formatCurrency(record.deductions)}</span>
-                      ) : (
-                        <span className="text-navy-500 text-sm">—</span>
-                      )}
-                    </td>
-                    <td className="px-5 py-4">
-                      {record.incentives > 0 ? (
-                        <span className="text-success-400 text-sm font-mono font-bold">+{formatCurrency(record.incentives)}</span>
-                      ) : (
-                        <span className="text-navy-500 text-sm">—</span>
-                      )}
-                    </td>
-                    <td className="px-5 py-4">
-                      <span className="text-brand-400 text-base font-mono font-bold">{formatCurrency(net)}</span>
-                    </td>
-                    <td className="px-5 py-4 text-center">
-                      {record.paid ? (
-                        <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-lg bg-success-500/10 text-success-400">
-                          <CheckCircle2 className="w-3.5 h-3.5" />
-                          تم الصرف
-                        </span>
-                      ) : (
-                        <button
-                          onClick={() => handlePay(record)}
-                          className="btn-primary text-xs px-3 py-1.5 inline-flex items-center gap-1.5"
-                        >
-                          <Wallet className="w-3.5 h-3.5" />
-                          صرف واعتماد
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-            <tfoot>
-              <tr className="border-t-2 border-navy-700/50 bg-navy-900/50">
-                <td className="px-5 py-4" colSpan={6}>
-                  <span className="text-white font-bold text-sm">الإجمالي العام</span>
-                </td>
-                <td className="px-5 py-4">
-                  <span className="text-brand-400 text-lg font-mono font-bold">{formatCurrency(totalPayroll)}</span>
-                </td>
-                <td></td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-      </div>
+      ) : (
+        <div className="glass-card overflow-hidden border border-navy-700/60">
+          <div className="px-5 py-4 border-b border-navy-700/50 flex items-center justify-between">
+            <h3 className="text-white font-bold text-base flex items-center gap-2">
+              <Users className="w-5 h-5 text-brand-400" />
+              <span>كشف الرواتب - {months.find((m) => m.value === selectedMonth)?.label}</span>
+            </h3>
+            <span className="text-xs text-navy-400">
+              يُحسب الصافي تلقائياً (الأساسي + الإضافي + البدلات - الاستقطاعات)
+            </span>
+          </div>
 
-      {/* Receipt Modal */}
-      {payRecord && showReceipt && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in" onClick={() => { setShowReceipt(false); setPayRecord(null); }}>
-          <div className="glass-card w-full max-w-md animate-scale-in" onClick={(e) => e.stopPropagation()}>
-            <div className="px-6 py-4 border-b border-navy-700/50 flex items-center justify-between">
-              <h3 className="text-white font-bold text-lg flex items-center gap-2">
-                <Receipt className="w-5 h-5 text-success-400" />
-                إيصال صرف راتب
-              </h3>
-              <button onClick={() => { setShowReceipt(false); setPayRecord(null); }} className="w-9 h-9 rounded-xl bg-navy-700/50 hover:bg-navy-700 flex items-center justify-center text-navy-300 hover:text-white transition-all">
-                <X className="w-5 h-5" />
+          <div className="overflow-x-auto">
+            <table className="w-full text-right text-xs">
+              <thead>
+                <tr className="border-b border-navy-700/50 bg-navy-900/50">
+                  <th className="text-navy-400 font-medium px-5 py-3">الموظف والوظيفة</th>
+                  <th className="text-navy-400 font-medium px-5 py-3">الراتب الأساسي</th>
+                  <th className="text-navy-400 font-medium px-5 py-3">ساعات العمل</th>
+                  <th className="text-navy-400 font-medium px-5 py-3">ساعات إضافية</th>
+                  <th className="text-navy-400 font-medium px-5 py-3">استقطاعات</th>
+                  <th className="text-navy-400 font-medium px-5 py-3">بدلات ومكافآت</th>
+                  <th className="text-navy-400 font-medium px-5 py-3">صافي الراتب</th>
+                  <th className="text-navy-400 font-medium px-5 py-3 text-center">إجراء</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-navy-800">
+                {dynamicPayroll.map((rec) => {
+                  return (
+                    <tr key={rec.id} className="hover:bg-navy-800/40 transition-colors">
+                      <td className="px-5 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-xl bg-navy-700/60 flex items-center justify-center font-bold text-white text-xs">
+                            {rec.employeeNameAr.charAt(0)}
+                          </div>
+                          <div>
+                            <Link
+                              to={`/shifts/employees/${rec.employeeId}`}
+                              className="font-bold text-white hover:text-brand-400 transition-colors flex items-center gap-1"
+                            >
+                              <span>{rec.employeeNameAr}</span>
+                              <ExternalLink className="w-3 h-3 text-navy-400" />
+                            </Link>
+                            <span className="text-[11px] text-navy-400">{rec.roleAr}</span>
+                          </div>
+                        </div>
+                      </td>
+
+                      <td className="px-5 py-4 font-mono font-medium text-white">
+                        {formatCurrency(rec.baseSalary)}
+                      </td>
+
+                      <td className="px-5 py-4 font-mono text-navy-300">
+                        {rec.totalHours} س
+                      </td>
+
+                      <td className="px-5 py-4 font-mono text-emerald-400">
+                        {rec.overtimeHours > 0 ? (
+                          <span>
+                            {rec.overtimeHours} س
+                            <span className="text-[10px] text-navy-400 block font-normal">
+                              +{formatCurrency(rec.overtimeHours * 50)}
+                            </span>
+                          </span>
+                        ) : (
+                          '—'
+                        )}
+                      </td>
+
+                      <td className="px-5 py-4 font-mono text-danger-400">
+                        {rec.deductions > 0 ? `-${formatCurrency(rec.deductions)}` : '—'}
+                      </td>
+
+                      <td className="px-5 py-4 font-mono text-emerald-400">
+                        {rec.incentives > 0 ? `+${formatCurrency(rec.incentives)}` : '—'}
+                      </td>
+
+                      <td className="px-5 py-4 font-mono font-bold text-brand-400 text-sm">
+                        {formatCurrency(rec.netSalary)}
+                      </td>
+
+                      <td className="px-5 py-4 text-center">
+                        {rec.paid ? (
+                          <div className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-success-500/10 text-success-400 border border-success-500/20 font-bold">
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            <span>تم الصرف</span>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handlePay(rec)}
+                            className="btn-primary py-1.5 px-4 text-xs font-bold cursor-pointer inline-flex items-center gap-1.5 shadow-md shadow-brand-500/20"
+                          >
+                            <Wallet className="w-3.5 h-3.5" />
+                            <span>صرف واعتماد</span>
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* ==================================================== */}
+      {/* Payslip Receipt Modal */}
+      {/* ==================================================== */}
+      {showReceipt && payRecord && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-navy-950/80 backdrop-blur-md animate-fade-in"
+          onClick={() => setShowReceipt(false)}
+        >
+          <div
+            className="glass-card w-full max-w-md p-6 border border-navy-700 shadow-2xl rounded-2xl animate-scale-in text-right"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4 pb-3 border-b border-navy-800">
+              <div className="flex items-center gap-2">
+                <Receipt className="w-5 h-5 text-brand-400" />
+                <h3 className="text-white font-bold text-base">سند صرف راتب معتمد</h3>
+              </div>
+              <button onClick={() => setShowReceipt(false)} className="text-navy-400 hover:text-white">
+                <X className="w-4 h-4" />
               </button>
             </div>
-            <div className="p-6 space-y-4">
-              <div className="text-center py-3">
-                <div className="w-16 h-16 rounded-full bg-success-500/15 flex items-center justify-center mx-auto mb-3">
-                  <CheckCircle2 className="w-8 h-8 text-success-400" />
+
+            <div className="space-y-3 text-xs mb-5">
+              <div className="p-3 rounded-xl bg-navy-900/80 border border-navy-800 space-y-2">
+                <div className="flex justify-between">
+                  <span className="text-navy-400">اسم الموظف:</span>
+                  <span className="text-white font-bold">{payRecord.employeeNameAr}</span>
                 </div>
-                <p className="text-white font-bold text-lg">تم اعتماد صرف الراتب</p>
-                <p className="text-navy-400 text-sm">إيصال رقم: PAY-{Date.now().toString().slice(-6)}</p>
+                <div className="flex justify-between">
+                  <span className="text-navy-400">الوظيفة:</span>
+                  <span className="text-navy-200">{payRecord.roleAr}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-navy-400">الفترة المستحقة:</span>
+                  <span className="text-brand-300 font-mono">{payRecord.period}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-navy-400">تاريخ وساعة الصرف:</span>
+                  <span className="text-navy-300 font-mono">
+                    {new Date().toLocaleDateString('ar-EG')} - {new Date().toLocaleTimeString('ar-EG')}
+                  </span>
+                </div>
               </div>
 
-              <div className="bg-navy-900/50 rounded-xl border border-navy-700/40 divide-y divide-navy-700/30">
-                <ReceiptRow label="اسم الموظف" value={payRecord.employeeNameAr} />
-                <ReceiptRow label="الوظيفة" value={payRecord.roleAr} />
-                <ReceiptRow label="الراتب الأساسي" value={formatCurrency(payRecord.baseSalary)} />
-                <ReceiptRow label="ساعات العمل الفعلية" value={`${payRecord.totalHours} ساعة`} />
-                <ReceiptRow label="ساعات إضافية" value={`${payRecord.overtimeHours} س × ${overtimeRate} ج = ${formatCurrency(payRecord.overtimeHours * overtimeRate)}`} />
-                {payRecord.deductions > 0 && <ReceiptRow label="استقطاعات" value={`-${formatCurrency(payRecord.deductions)}`} danger />}
-                {payRecord.incentives > 0 && <ReceiptRow label="بدلات ومكافآت" value={`+${formatCurrency(payRecord.incentives)}`} success />}
-                <ReceiptRow label="صافي الراتب المصروف" value={formatCurrency(netPayable(payRecord))} highlight />
-                <ReceiptRow label="تاريخ الصرف" value={new Date().toLocaleString('ar-EG', { dateStyle: 'medium', timeStyle: 'short' })} />
+              <div className="p-3 rounded-xl bg-navy-900/40 border border-navy-800/80 space-y-2">
+                <div className="flex justify-between">
+                  <span className="text-navy-400">الراتب الأساسي:</span>
+                  <span className="font-mono text-white">{formatCurrency(payRecord.baseSalary)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-navy-400">ساعات إضافية ({payRecord.overtimeHours} س):</span>
+                  <span className="font-mono text-emerald-400">+{formatCurrency(payRecord.overtimeHours * 50)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-navy-400">بدلات ومكافآت:</span>
+                  <span className="font-mono text-emerald-400">+{formatCurrency(payRecord.incentives)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-navy-400">استقطاعات وجزاءات:</span>
+                  <span className="font-mono text-danger-400">-{formatCurrency(payRecord.deductions)}</span>
+                </div>
+                <div className="pt-2 border-t border-navy-800 flex justify-between font-bold text-sm">
+                  <span className="text-white">الصافي المنصرف:</span>
+                  <span className="font-mono text-brand-400">{formatCurrency(payRecord.netSalary)}</span>
+                </div>
               </div>
+
+              <p className="text-[11px] text-navy-400 text-center">
+                تم تسجيل المعاملة كمصروف في شاشة الخزينة اليومية وحسابات الرواتب.
+              </p>
             </div>
-            <div className="px-6 py-4 border-t border-navy-700/50 flex gap-3">
+
+            <div className="flex items-center gap-3">
               <button
-                onClick={() => { setShowReceipt(false); setPayRecord(null); showToast('تم تصدير الإيصال', 'success'); }}
-                className="btn-ghost flex-1 flex items-center justify-center gap-2"
+                type="button"
+                onClick={() => {
+                  window.print();
+                }}
+                className="btn-ghost flex-1 py-2 text-xs font-bold border border-navy-700 flex items-center justify-center gap-1.5"
               >
-                <Download className="w-5 h-5" />
-                تصدير
+                <Download className="w-4 h-4" />
+                <span>طباعة السند</span>
               </button>
               <button
-                onClick={() => { setShowReceipt(false); setPayRecord(null); }}
-                className="btn-primary flex-1 flex items-center justify-center gap-2"
+                type="button"
+                onClick={() => setShowReceipt(false)}
+                className="btn-primary flex-1 py-2 text-xs font-bold flex items-center justify-center gap-1.5"
               >
-                <CheckCircle2 className="w-5 h-5" />
-                تم
+                <Check className="w-4 h-4" />
+                <span>تم الاعتماد</span>
               </button>
             </div>
           </div>
         </div>
       )}
-    </div>
-  );
-}
-
-function ReceiptRow({ label, value, highlight, danger, success }: { label: string; value: string; highlight?: boolean; danger?: boolean; success?: boolean }) {
-  return (
-    <div className="flex items-center justify-between px-4 py-2.5">
-      <span className="text-navy-400 text-sm">{label}</span>
-      <span className={`text-sm font-mono font-bold ${danger ? 'text-danger-400' : success ? 'text-success-400' : highlight ? 'text-brand-400' : 'text-white'}`}>
-        {value}
-      </span>
     </div>
   );
 }

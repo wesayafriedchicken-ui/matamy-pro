@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabase';
-import type { Order, MenuItem, InventoryItem, Rider, KdsTicket, Shift, Transaction, Role, AppUser, UserStatus } from '@/types';
+import type { Order, MenuItem, InventoryItem, Rider, KdsTicket, Shift, Transaction, Role, AppUser, UserStatus, Employee, ShiftTask, PayrollRecord } from '@/types';
 
 type DbRow = Record<string, unknown>;
 
@@ -377,22 +377,256 @@ export async function dbAdvanceKdsTicket(ticketId: string): Promise<boolean> {
 }
 
 // ==========================================
-// Shifts & Transactions
+// ==========================================
+// Employees
+// ==========================================
+export async function dbFetchEmployees(): Promise<Employee[] | null> {
+  const { data, error } = await supabase.from('employees').select('*').order('created_at', { ascending: false });
+  if (error) {
+    console.warn('[Supabase] Failed to fetch employees:', error.message);
+    return null;
+  }
+  return (data || []).map((row: DbRow) => ({
+    id: String(row.id),
+    employeeNumber: String(row.employee_number || ''),
+    name: String(row.name || ''),
+    nameAr: String(row.name_ar || ''),
+    phone: String(row.phone || ''),
+    nationalId: row.national_id ? String(row.national_id) : undefined,
+    roleId: row.role_id ? String(row.role_id) : undefined,
+    role: String(row.role || ''),
+    roleAr: String(row.role_ar || ''),
+    department: row.department ? String(row.department) : undefined,
+    contractType: (row.contract_type as Employee['contractType']) || 'full_time',
+    hireDate: String(row.hire_date || ''),
+    baseSalary: Number(row.base_salary || 0),
+    hourlyRate: Number(row.hourly_rate || 0),
+    overtimeRate: Number(row.overtime_rate || 0),
+    monthlyIncentives: row.monthly_incentives !== null && row.monthly_incentives !== undefined ? Number(row.monthly_incentives) : 0,
+    status: (row.status as Employee['status']) || 'active',
+    bankAccount: row.bank_account ? String(row.bank_account) : undefined,
+    notes: row.notes ? String(row.notes) : undefined,
+    avatarUrl: row.avatar_url ? String(row.avatar_url) : undefined,
+    createdAt: String(row.created_at || new Date().toISOString()),
+    updatedAt: row.updated_at ? String(row.updated_at) : undefined,
+  }));
+}
+
+export async function dbUpsertEmployee(emp: Employee): Promise<boolean> {
+  const { error } = await supabase.from('employees').upsert({
+    id: emp.id,
+    employee_number: emp.employeeNumber,
+    name: emp.name,
+    name_ar: emp.nameAr,
+    phone: emp.phone,
+    national_id: emp.nationalId || null,
+    role_id: emp.roleId || null,
+    role: emp.role,
+    role_ar: emp.roleAr,
+    department: emp.department || null,
+    contract_type: emp.contractType,
+    hire_date: emp.hireDate,
+    base_salary: emp.baseSalary,
+    hourly_rate: emp.hourlyRate,
+    overtime_rate: emp.overtimeRate,
+    monthly_incentives: emp.monthlyIncentives || 0,
+    status: emp.status,
+    bank_account: emp.bankAccount || null,
+    notes: emp.notes || null,
+    avatar_url: emp.avatarUrl || null,
+    created_at: emp.createdAt,
+    updated_at: new Date().toISOString(),
+  });
+
+  if (error) {
+    console.warn('[Supabase] Failed to upsert employee:', error.message);
+    return false;
+  }
+  return true;
+}
+
+export async function dbDeleteEmployee(id: string): Promise<boolean> {
+  const { error } = await supabase.from('employees').delete().eq('id', id);
+  if (error) {
+    console.warn('[Supabase] Failed to delete employee:', error.message);
+    return false;
+  }
+  return true;
+}
+
+// ==========================================
+// Shifts & Attendance
 // ==========================================
 export async function dbFetchShifts(): Promise<Shift[] | null> {
   const { data, error } = await supabase.from('shifts').select('*').order('date', { ascending: false });
   if (error) return null;
   return (data || []).map((row: DbRow) => ({
     id: String(row.id),
-    employeeName: String(row.employee_name),
-    employeeNameAr: String(row.employee_name_ar),
-    role: String(row.role),
-    roleAr: String(row.role_ar),
-    startTime: String(row.start_time),
-    endTime: String(row.end_time),
+    employeeId: row.employee_id ? String(row.employee_id) : undefined,
+    employeeName: String(row.employee_name || ''),
+    employeeNameAr: String(row.employee_name_ar || ''),
+    role: String(row.role || ''),
+    roleAr: String(row.role_ar || ''),
+    startTime: String(row.start_time || ''),
+    endTime: String(row.end_time || ''),
     status: row.status as Shift['status'],
-    date: String(row.date),
+    date: String(row.date || ''),
+    checkIn: row.check_in ? String(row.check_in) : undefined,
+    checkOut: row.check_out ? String(row.check_out) : undefined,
+    hoursWorked: row.hours_worked !== null && row.hours_worked !== undefined ? Number(row.hours_worked) : undefined,
+    overtimeHours: row.overtime_hours !== null && row.overtime_hours !== undefined ? Number(row.overtime_hours) : undefined,
+    geofenceStatus: (row.geofence_status as Shift['geofenceStatus']) || undefined,
+    notes: row.notes ? String(row.notes) : undefined,
   }));
+}
+
+export async function dbCreateShift(shift: Shift): Promise<boolean> {
+  const { error } = await supabase.from('shifts').upsert({
+    id: shift.id,
+    employee_id: shift.employeeId || null,
+    employee_name: shift.employeeName,
+    employee_name_ar: shift.employeeNameAr,
+    role: shift.role,
+    role_ar: shift.roleAr,
+    start_time: shift.startTime,
+    end_time: shift.endTime,
+    status: shift.status,
+    date: shift.date,
+    check_in: shift.checkIn || null,
+    check_out: shift.checkOut || null,
+    hours_worked: shift.hoursWorked || null,
+    overtime_hours: shift.overtimeHours || null,
+    geofence_status: shift.geofenceStatus || null,
+    notes: shift.notes || null,
+  });
+
+  if (error) {
+    console.warn('[Supabase] Failed to upsert shift:', error.message);
+    return false;
+  }
+  return true;
+}
+
+export async function dbUpdateShift(shift: Shift): Promise<boolean> {
+  return dbCreateShift(shift);
+}
+
+export async function dbDeleteShift(id: string): Promise<boolean> {
+  const { error } = await supabase.from('shifts').delete().eq('id', id);
+  if (error) {
+    console.warn('[Supabase] Failed to delete shift:', error.message);
+    return false;
+  }
+  return true;
+}
+
+// ==========================================
+// Shift Tasks
+// ==========================================
+export async function dbFetchShiftTasks(): Promise<ShiftTask[] | null> {
+  const { data, error } = await supabase.from('shift_tasks').select('*').order('deadline', { ascending: true });
+  if (error) {
+    console.warn('[Supabase] Failed to fetch shift tasks:', error.message);
+    return null;
+  }
+  return (data || []).map((row: DbRow) => ({
+    id: String(row.id),
+    bucket: row.bucket as ShiftTask['bucket'],
+    labelAr: String(row.label_ar || ''),
+    assignedTo: String(row.assigned_to || ''),
+    employeeId: row.employee_id ? String(row.employee_id) : undefined,
+    deadline: String(row.deadline || ''),
+    completed: Boolean(row.completed),
+    hasProof: Boolean(row.has_proof),
+    note: row.note ? String(row.note) : undefined,
+    date: row.date ? String(row.date) : undefined,
+    proofUrl: row.proof_url ? String(row.proof_url) : undefined,
+    completedAt: row.completed_at ? String(row.completed_at) : undefined,
+  }));
+}
+
+export async function dbUpsertShiftTask(task: ShiftTask): Promise<boolean> {
+  const { error } = await supabase.from('shift_tasks').upsert({
+    id: task.id,
+    bucket: task.bucket,
+    label_ar: task.labelAr,
+    assigned_to: task.assignedTo,
+    employee_id: task.employeeId || null,
+    deadline: task.deadline,
+    completed: task.completed,
+    has_proof: task.hasProof,
+    note: task.note || null,
+    date: task.date || null,
+    proof_url: task.proofUrl || null,
+    completed_at: task.completedAt || null,
+  });
+
+  if (error) {
+    console.warn('[Supabase] Failed to upsert shift task:', error.message);
+    return false;
+  }
+  return true;
+}
+
+export async function dbDeleteShiftTask(id: string): Promise<boolean> {
+  const { error } = await supabase.from('shift_tasks').delete().eq('id', id);
+  if (error) {
+    console.warn('[Supabase] Failed to delete shift task:', error.message);
+    return false;
+  }
+  return true;
+}
+
+// ==========================================
+// Payroll Records
+// ==========================================
+export async function dbFetchPayrollRecords(): Promise<PayrollRecord[] | null> {
+  const { data, error } = await supabase.from('payroll_records').select('*').order('period', { ascending: false });
+  if (error) {
+    console.warn('[Supabase] Failed to fetch payroll records:', error.message);
+    return null;
+  }
+  return (data || []).map((row: DbRow) => ({
+    id: String(row.id),
+    employeeId: String(row.employee_id),
+    employeeNameAr: String(row.employee_name_ar),
+    roleAr: String(row.role_ar),
+    period: String(row.period),
+    baseSalary: Number(row.base_salary || 0),
+    totalHours: Number(row.total_hours || 0),
+    overtimeHours: Number(row.overtime_hours || 0),
+    deductions: Number(row.deductions || 0),
+    incentives: Number(row.incentives || 0),
+    netSalary: Number(row.net_salary || 0),
+    paid: Boolean(row.paid),
+    paidAt: row.paid_at ? String(row.paid_at) : undefined,
+    paymentMethod: (row.payment_method as PayrollRecord['paymentMethod']) || 'cash',
+  }));
+}
+
+export async function dbUpsertPayrollRecord(record: PayrollRecord): Promise<boolean> {
+  const { error } = await supabase.from('payroll_records').upsert({
+    id: record.id,
+    employee_id: record.employeeId,
+    employee_name_ar: record.employeeNameAr,
+    role_ar: record.roleAr,
+    period: record.period,
+    base_salary: record.baseSalary,
+    total_hours: record.totalHours,
+    overtime_hours: record.overtimeHours,
+    deductions: record.deductions,
+    incentives: record.incentives,
+    net_salary: record.netSalary,
+    paid: record.paid,
+    paid_at: record.paidAt || null,
+    payment_method: record.paymentMethod || 'cash',
+  });
+
+  if (error) {
+    console.warn('[Supabase] Failed to upsert payroll record:', error.message);
+    return false;
+  }
+  return true;
 }
 
 export async function dbFetchTransactions(): Promise<Transaction[] | null> {

@@ -6,14 +6,11 @@ import {
   useEffect,
   type ReactNode,
 } from 'react';
-import type { Order, MenuItem, InventoryItem, Rider, KdsTicket, Shift, Transaction, AppNotification, Role, AppUser, UserStatus } from '@/types';
+import type { Order, MenuItem, InventoryItem, Rider, KdsTicket, Shift, Transaction, AppNotification, Role, AppUser, UserStatus, Employee, ShiftTask, PayrollRecord } from '@/types';
 import {
-  mockOrders,
   mockMenuItems,
   mockInventory,
   mockRiders,
-  mockKdsTickets,
-  mockShifts,
 } from '@/data/mockData';
 import { defaultRoles, defaultUsers } from '@/data/rolesPermissionsData';
 import { supabase, checkSupabaseConnection } from '@/lib/supabase';
@@ -38,6 +35,17 @@ import {
   dbFetchKdsTickets,
   dbAdvanceKdsTicket,
   dbFetchShifts,
+  dbCreateShift,
+  dbUpdateShift,
+  dbDeleteShift,
+  dbFetchEmployees,
+  dbUpsertEmployee,
+  dbDeleteEmployee,
+  dbFetchShiftTasks,
+  dbUpsertShiftTask,
+  dbDeleteShiftTask,
+  dbFetchPayrollRecords,
+  dbUpsertPayrollRecord,
   dbFetchTransactions,
   dbCreateTransaction,
   dbDeleteTransaction,
@@ -139,6 +147,27 @@ interface AppContextValue {
   setTaxRate: (rate: number) => void;
   showZeroVatInCart: boolean;
   setShowZeroVatInCart: (show: boolean) => void;
+  // Employees Management (/shifts/employees)
+  employees: Employee[];
+  addEmployee: (emp: Employee) => Promise<boolean>;
+  updateEmployee: (emp: Employee) => Promise<boolean>;
+  deleteEmployee: (id: string) => Promise<boolean>;
+  getEmployeeById: (id: string) => Employee | undefined;
+  // Shifts & Attendance (/shifts/schedule)
+  addShift: (shift: Shift) => Promise<boolean>;
+  updateShift: (shift: Shift) => Promise<boolean>;
+  deleteShift: (id: string) => Promise<boolean>;
+  recordAttendance: (shiftId: string, attendance: Partial<Shift>) => Promise<boolean>;
+  // Shift Tasks (/shifts/tasks)
+  shiftTasks: ShiftTask[];
+  addShiftTask: (task: ShiftTask) => Promise<boolean>;
+  updateShiftTask: (task: ShiftTask) => Promise<boolean>;
+  toggleShiftTask: (id: string) => Promise<boolean>;
+  deleteShiftTask: (id: string) => Promise<boolean>;
+  // Payroll (/shifts/payroll)
+  payrollRecords: PayrollRecord[];
+  savePayrollRecord: (record: PayrollRecord) => Promise<boolean>;
+  disbursePayroll: (record: PayrollRecord) => Promise<boolean>;
 }
 
 export interface InventoryCategoryOption {
@@ -244,12 +273,84 @@ const initialNotifications: AppNotification[] = [
 const AppContext = createContext<AppContextValue | null>(null);
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [orders, setOrders] = useState<Order[]>(mockOrders);
+  const [orders, setOrders] = useState<Order[]>(() => {
+    try {
+      const saved = localStorage.getItem('nine_fries_orders_v2');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch {
+      // ignore
+    }
+    return []; // Zero fake orders
+  });
   const [menuItems, setMenuItems] = useState<MenuItem[]>(mockMenuItems);
   const [inventory, setInventory] = useState<InventoryItem[]>(mockInventory);
   const [riders, setRiders] = useState<Rider[]>(mockRiders);
-  const [kdsTickets, setKdsTickets] = useState<KdsTicket[]>(mockKdsTickets);
-  const [shifts, setShifts] = useState<Shift[]>(mockShifts);
+  const [kdsTickets, setKdsTickets] = useState<KdsTicket[]>(() => {
+    try {
+      const saved = localStorage.getItem('nine_fries_kds_tickets_v2');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch {
+      // ignore
+    }
+    return []; // Zero fake KDS tickets
+  });
+  const [shifts, setShifts] = useState<Shift[]>(() => {
+    try {
+      const saved = localStorage.getItem('nine_fries_shifts_v2');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch {
+      // ignore
+    }
+    return []; // Completely zeroed out - no fake shifts
+  });
+
+  const [employees, setEmployees] = useState<Employee[]>(() => {
+    try {
+      const saved = localStorage.getItem('app_employees_v1');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch {
+      // ignore
+    }
+    return []; // Completely zeroed out - no fake employees
+  });
+
+  const [shiftTasks, setShiftTasks] = useState<ShiftTask[]>(() => {
+    try {
+      const saved = localStorage.getItem('app_shift_tasks_v1');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch {
+      // ignore
+    }
+    return []; // Completely zeroed out - no fake tasks
+  });
+
+  const [payrollRecords, setPayrollRecords] = useState<PayrollRecord[]>(() => {
+    try {
+      const saved = localStorage.getItem('app_payroll_records_v1');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch {
+      // ignore
+    }
+    return []; // Completely zeroed out - no fake payroll
+  });
   const [transactions, setTransactions] = useState<Transaction[]>(() => {
     try {
       const saved = localStorage.getItem('nine_fries_transactions_v2');
@@ -520,7 +621,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Check database and load data if tables exist
   const loadDataFromDb = useCallback(async () => {
     try {
-      const [dbOrders, dbMenu, dbInv, dbRiders, dbTickets, dbShiftsList, dbTxs, dbRolesList, dbUsersList] = await Promise.all([
+      const [
+        dbOrders,
+        dbMenu,
+        dbInv,
+        dbRiders,
+        dbTickets,
+        dbShiftsList,
+        dbTxs,
+        dbRolesList,
+        dbUsersList,
+        dbEmployeesList,
+        dbShiftTasksList,
+        dbPayrollList,
+      ] = await Promise.all([
         dbFetchOrders(),
         dbFetchMenuItems(),
         dbFetchInventory(),
@@ -530,14 +644,38 @@ export function AppProvider({ children }: { children: ReactNode }) {
         dbFetchTransactions(),
         dbFetchRoles(),
         dbFetchUsers(),
+        dbFetchEmployees(),
+        dbFetchShiftTasks(),
+        dbFetchPayrollRecords(),
       ]);
 
-      if (dbOrders && dbOrders.length > 0) setOrders(dbOrders);
+      if (dbOrders) {
+        setOrders(dbOrders);
+        localStorage.setItem('nine_fries_orders_v2', JSON.stringify(dbOrders));
+      }
       if (dbMenu && dbMenu.length > 0) setMenuItems(dbMenu);
       if (dbInv && dbInv.length > 0) setInventory(dbInv);
       if (dbRiders && dbRiders.length > 0) setRiders(dbRiders);
-      if (dbTickets && dbTickets.length > 0) setKdsTickets(dbTickets);
-      if (dbShiftsList && dbShiftsList.length > 0) setShifts(dbShiftsList);
+      if (dbTickets) {
+        setKdsTickets(dbTickets);
+        localStorage.setItem('nine_fries_kds_tickets_v2', JSON.stringify(dbTickets));
+      }
+      if (dbShiftsList) {
+        setShifts(dbShiftsList);
+        localStorage.setItem('nine_fries_shifts_v2', JSON.stringify(dbShiftsList));
+      }
+      if (dbEmployeesList) {
+        setEmployees(dbEmployeesList);
+        localStorage.setItem('app_employees_v1', JSON.stringify(dbEmployeesList));
+      }
+      if (dbShiftTasksList) {
+        setShiftTasks(dbShiftTasksList);
+        localStorage.setItem('app_shift_tasks_v1', JSON.stringify(dbShiftTasksList));
+      }
+      if (dbPayrollList) {
+        setPayrollRecords(dbPayrollList);
+        localStorage.setItem('app_payroll_records_v1', JSON.stringify(dbPayrollList));
+      }
       if (dbTxs) {
         setTransactions(dbTxs);
         localStorage.setItem('nine_fries_transactions_v2', JSON.stringify(dbTxs));
@@ -593,7 +731,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
         { event: '*', schema: 'public', table: 'orders' },
         async () => {
           const freshOrders = await dbFetchOrders();
-          if (freshOrders) setOrders(freshOrders);
+          if (freshOrders) {
+            setOrders(freshOrders);
+            localStorage.setItem('nine_fries_orders_v2', JSON.stringify(freshOrders));
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'kds_tickets' },
+        async () => {
+          const freshTickets = await dbFetchKdsTickets();
+          if (freshTickets) {
+            setKdsTickets(freshTickets);
+            localStorage.setItem('nine_fries_kds_tickets_v2', JSON.stringify(freshTickets));
+          }
         }
       )
       .on(
@@ -654,40 +806,125 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // Actions with Supabase synchronization
   const addOrder = useCallback((order: Order) => {
-    setOrders((prev) => [order, ...prev]);
+    setOrders((prev) => {
+      const updated = [order, ...prev];
+      try {
+        localStorage.setItem('nine_fries_orders_v2', JSON.stringify(updated));
+      } catch {
+        // ignore
+      }
+      return updated;
+    });
+
+    // Automatically create a KDS ticket if order is in kitchen or new
+    if (order.status !== 'completed' && order.status !== 'cancelled') {
+      const newTicket: KdsTicket = {
+        id: `kds-${order.id}-${Date.now()}`,
+        orderNumber: order.orderNumber,
+        items: order.items.map((item) => ({
+          nameAr: item.nameAr || item.name,
+          quantity: item.quantity,
+          notes: order.notes,
+          modifiers: item.modifiers?.map((m) => (typeof m === 'string' ? m : m.nameAr || m.name)),
+        })),
+        createdAt: order.createdAt || new Date().toISOString(),
+        status: 'preparing',
+        priority: false,
+        station: 'Kitchen',
+        stationAr: 'المطبخ والتحضير',
+      };
+      setKdsTickets((prev) => {
+        const updatedTickets = [...prev, newTicket];
+        try {
+          localStorage.setItem('nine_fries_kds_tickets_v2', JSON.stringify(updatedTickets));
+        } catch {
+          // ignore
+        }
+        return updatedTickets;
+      });
+    }
+
     showToast(`تم إنشاء الطلب ${order.orderNumber} بنجاح`, 'success');
     dbCreateOrder(order);
   }, [showToast]);
 
   const updateOrder = useCallback((order: Order) => {
-    setOrders((prev) =>
-      prev.map((o) => (o.id === order.id ? { ...order, updatedAt: new Date().toISOString() } : o)),
-    );
+    setOrders((prev) => {
+      const updated = prev.map((o) => (o.id === order.id ? { ...order, updatedAt: new Date().toISOString() } : o));
+      try {
+        localStorage.setItem('nine_fries_orders_v2', JSON.stringify(updated));
+      } catch {
+        // ignore
+      }
+      return updated;
+    });
     showToast(`تم تعديل الطلب ${order.orderNumber} بنجاح`, 'success');
     dbUpdateOrder(order);
   }, [showToast]);
 
   const deleteOrder = useCallback((orderId: string) => {
-    setOrders((prev) => prev.filter((o) => o.id !== orderId));
+    setOrders((prev) => {
+      const updated = prev.filter((o) => o.id !== orderId);
+      try {
+        localStorage.setItem('nine_fries_orders_v2', JSON.stringify(updated));
+      } catch {
+        // ignore
+      }
+      return updated;
+    });
+    setKdsTickets((prev) => {
+      const updatedTickets = prev.filter((t) => !t.id.includes(orderId) && t.orderNumber !== orderId);
+      try {
+        localStorage.setItem('nine_fries_kds_tickets_v2', JSON.stringify(updatedTickets));
+      } catch {
+        // ignore
+      }
+      return updatedTickets;
+    });
     showToast('تم حذف الطلب بنجاح', 'info');
     dbDeleteOrder(orderId);
   }, [showToast]);
 
   const updateOrderStatus = useCallback((orderId: string, status: Order['status']) => {
-    setOrders((prev) =>
-      prev.map((o) =>
+    setOrders((prev) => {
+      const updated = prev.map((o) =>
         o.id === orderId ? { ...o, status, updatedAt: new Date().toISOString() } : o,
-      ),
-    );
+      );
+      try {
+        localStorage.setItem('nine_fries_orders_v2', JSON.stringify(updated));
+      } catch {
+        // ignore
+      }
+      return updated;
+    });
+
+    if (status === 'completed' || status === 'cancelled') {
+      setKdsTickets((prev) => {
+        const updatedTickets = prev.filter((t) => !t.id.includes(orderId) && t.orderNumber !== orderId);
+        try {
+          localStorage.setItem('nine_fries_kds_tickets_v2', JSON.stringify(updatedTickets));
+        } catch {
+          // ignore
+        }
+        return updatedTickets;
+      });
+    }
+
     dbUpdateOrderStatus(orderId, status);
   }, []);
 
   const assignRider = useCallback((orderId: string, riderId: string, riderName: string) => {
-    setOrders((prev) =>
-      prev.map((o) =>
+    setOrders((prev) => {
+      const updated = prev.map((o) =>
         o.id === orderId ? { ...o, riderId, riderName } : o,
-      ),
-    );
+      );
+      try {
+        localStorage.setItem('nine_fries_orders_v2', JSON.stringify(updated));
+      } catch {
+        // ignore
+      }
+      return updated;
+    });
     showToast(`تم تعيين السائق ${riderName} للطلب`, 'info');
     dbAssignRider(orderId, riderId, riderName);
   }, [showToast]);
@@ -730,7 +967,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [showToast]);
 
   const advanceKdsTicket = useCallback((ticketId: string) => {
-    setKdsTickets((prev) => prev.filter((t) => t.id !== ticketId));
+    setKdsTickets((prev) => {
+      const updated = prev.filter((t) => t.id !== ticketId);
+      try {
+        localStorage.setItem('nine_fries_kds_tickets_v2', JSON.stringify(updated));
+      } catch {
+        // ignore
+      }
+      return updated;
+    });
     dbAdvanceKdsTicket(ticketId);
   }, []);
 
@@ -1092,6 +1337,269 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [],
   );
 
+  // ==========================================
+  // Employees Handlers (/shifts/employees)
+  // ==========================================
+  const addEmployee = useCallback(
+    async (emp: Employee): Promise<boolean> => {
+      setEmployees((prev) => {
+        const updated = [emp, ...prev];
+        try {
+          localStorage.setItem('app_employees_v1', JSON.stringify(updated));
+        } catch {
+          // ignore
+        }
+        return updated;
+      });
+      showToast(`تمت إضافة الموظف "${emp.nameAr}" بنجاح`, 'success');
+      return await dbUpsertEmployee(emp);
+    },
+    [showToast],
+  );
+
+  const updateEmployee = useCallback(
+    async (emp: Employee): Promise<boolean> => {
+      setEmployees((prev) => {
+        const updated = prev.map((e) => (e.id === emp.id ? emp : e));
+        try {
+          localStorage.setItem('app_employees_v1', JSON.stringify(updated));
+        } catch {
+          // ignore
+        }
+        return updated;
+      });
+      showToast(`تم تحديث بيانات الموظف "${emp.nameAr}" بنجاح`, 'success');
+      return await dbUpsertEmployee(emp);
+    },
+    [showToast],
+  );
+
+  const deleteEmployee = useCallback(
+    async (id: string): Promise<boolean> => {
+      const emp = employees.find((e) => e.id === id);
+      setEmployees((prev) => {
+        const updated = prev.filter((e) => e.id !== id);
+        try {
+          localStorage.setItem('app_employees_v1', JSON.stringify(updated));
+        } catch {
+          // ignore
+        }
+        return updated;
+      });
+      showToast(`تم حذف الموظف "${emp?.nameAr || id}"`, 'info');
+      return await dbDeleteEmployee(id);
+    },
+    [employees, showToast],
+  );
+
+  const getEmployeeById = useCallback(
+    (id: string) => {
+      return employees.find((e) => e.id === id);
+    },
+    [employees],
+  );
+
+  // ==========================================
+  // Shifts Handlers (/shifts/schedule)
+  // ==========================================
+  const addShift = useCallback(
+    async (shift: Shift): Promise<boolean> => {
+      setShifts((prev) => {
+        const updated = [shift, ...prev];
+        try {
+          localStorage.setItem('nine_fries_shifts_v2', JSON.stringify(updated));
+        } catch {
+          // ignore
+        }
+        return updated;
+      });
+      showToast(`تمت جدولة وردية لـ ${shift.employeeNameAr}`, 'success');
+      return await dbCreateShift(shift);
+    },
+    [showToast],
+  );
+
+  const updateShift = useCallback(
+    async (shift: Shift): Promise<boolean> => {
+      setShifts((prev) => {
+        const updated = prev.map((s) => (s.id === shift.id ? shift : s));
+        try {
+          localStorage.setItem('nine_fries_shifts_v2', JSON.stringify(updated));
+        } catch {
+          // ignore
+        }
+        return updated;
+      });
+      showToast(`تم تحديث بيانات وردية ${shift.employeeNameAr}`, 'success');
+      return await dbUpdateShift(shift);
+    },
+    [showToast],
+  );
+
+  const deleteShift = useCallback(
+    async (id: string): Promise<boolean> => {
+      setShifts((prev) => {
+        const updated = prev.filter((s) => s.id !== id);
+        try {
+          localStorage.setItem('nine_fries_shifts_v2', JSON.stringify(updated));
+        } catch {
+          // ignore
+        }
+        return updated;
+      });
+      showToast('تم حذف الوردية من الجدول', 'info');
+      return await dbDeleteShift(id);
+    },
+    [showToast],
+  );
+
+  const recordAttendance = useCallback(
+    async (shiftId: string, attendance: Partial<Shift>): Promise<boolean> => {
+      const shift = shifts.find((s) => s.id === shiftId);
+      if (!shift) return false;
+      const updated: Shift = {
+        ...shift,
+        ...attendance,
+      };
+      setShifts((prev) => {
+        const list = prev.map((s) => (s.id === shiftId ? updated : s));
+        try {
+          localStorage.setItem('nine_fries_shifts_v2', JSON.stringify(list));
+        } catch {
+          // ignore
+        }
+        return list;
+      });
+      showToast(`تم تسجيل الحضور/الانصراف لـ ${shift.employeeNameAr}`, 'success');
+      return await dbUpdateShift(updated);
+    },
+    [shifts, showToast],
+  );
+
+  // ==========================================
+  // Shift Tasks Handlers (/shifts/tasks)
+  // ==========================================
+  const addShiftTask = useCallback(
+    async (task: ShiftTask): Promise<boolean> => {
+      setShiftTasks((prev) => {
+        const updated = [...prev, task];
+        try {
+          localStorage.setItem('app_shift_tasks_v1', JSON.stringify(updated));
+        } catch {
+          // ignore
+        }
+        return updated;
+      });
+      showToast('تمت إضافة مهمة الشيفت بنجاح', 'success');
+      return await dbUpsertShiftTask(task);
+    },
+    [showToast],
+  );
+
+  const updateShiftTask = useCallback(
+    async (task: ShiftTask): Promise<boolean> => {
+      setShiftTasks((prev) => {
+        const updated = prev.map((t) => (t.id === task.id ? task : t));
+        try {
+          localStorage.setItem('app_shift_tasks_v1', JSON.stringify(updated));
+        } catch {
+          // ignore
+        }
+        return updated;
+      });
+      return await dbUpsertShiftTask(task);
+    },
+    [],
+  );
+
+  const toggleShiftTask = useCallback(
+    async (id: string): Promise<boolean> => {
+      const task = shiftTasks.find((t) => t.id === id);
+      if (!task) return false;
+      const updated: ShiftTask = {
+        ...task,
+        completed: !task.completed,
+        completedAt: !task.completed ? new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }) : undefined,
+      };
+      setShiftTasks((prev) => {
+        const list = prev.map((t) => (t.id === id ? updated : t));
+        try {
+          localStorage.setItem('app_shift_tasks_v1', JSON.stringify(list));
+        } catch {
+          // ignore
+        }
+        return list;
+      });
+      return await dbUpsertShiftTask(updated);
+    },
+    [shiftTasks],
+  );
+
+  const deleteShiftTask = useCallback(
+    async (id: string): Promise<boolean> => {
+      setShiftTasks((prev) => {
+        const updated = prev.filter((t) => t.id !== id);
+        try {
+          localStorage.setItem('app_shift_tasks_v1', JSON.stringify(updated));
+        } catch {
+          // ignore
+        }
+        return updated;
+      });
+      showToast('تم مسح المهمة', 'info');
+      return await dbDeleteShiftTask(id);
+    },
+    [showToast],
+  );
+
+  // ==========================================
+  // Payroll Handlers (/shifts/payroll)
+  // ==========================================
+  const savePayrollRecord = useCallback(
+    async (record: PayrollRecord): Promise<boolean> => {
+      setPayrollRecords((prev) => {
+        const exists = prev.some((r) => r.id === record.id);
+        const updated = exists ? prev.map((r) => (r.id === record.id ? record : r)) : [record, ...prev];
+        try {
+          localStorage.setItem('app_payroll_records_v1', JSON.stringify(updated));
+        } catch {
+          // ignore
+        }
+        return updated;
+      });
+      return await dbUpsertPayrollRecord(record);
+    },
+    [],
+  );
+
+  const disbursePayroll = useCallback(
+    async (record: PayrollRecord): Promise<boolean> => {
+      const updatedRecord: PayrollRecord = {
+        ...record,
+        paid: true,
+        paidAt: new Date().toISOString(),
+      };
+      await savePayrollRecord(updatedRecord);
+
+      // Record transaction in cash drawer / expenses
+      const expenseTx: Transaction = {
+        id: `tx-salary-${record.id}-${Date.now()}`,
+        type: 'expense',
+        category: 'Salaries',
+        categoryAr: 'رواتب وأجور',
+        amount: record.netSalary,
+        description: `Salary disbursement for ${record.employeeNameAr} (${record.period})`,
+        descriptionAr: `صرف راتب ${record.employeeNameAr} عن فترة ${record.period}`,
+        date: new Date().toISOString(),
+        method: record.paymentMethod === 'bank' ? 'card' : 'cash',
+      };
+      await addTransaction(expenseTx);
+      showToast(`تم اعتماد وصرف راتب ${record.employeeNameAr} بمبلغ ${record.netSalary.toLocaleString()} ج.م وتسجيله في المالية`, 'success');
+      return true;
+    },
+    [savePayrollRecord, addTransaction, showToast],
+  );
+
   return (
     <AppContext.Provider
       value={{
@@ -1101,6 +1609,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
         riders,
         kdsTickets,
         shifts,
+        addShift,
+        updateShift,
+        deleteShift,
+        recordAttendance,
+        employees,
+        addEmployee,
+        updateEmployee,
+        deleteEmployee,
+        getEmployeeById,
+        shiftTasks,
+        addShiftTask,
+        updateShiftTask,
+        toggleShiftTask,
+        deleteShiftTask,
+        payrollRecords,
+        savePayrollRecord,
+        disbursePayroll,
         transactions,
         addTransaction,
         deleteTransaction,

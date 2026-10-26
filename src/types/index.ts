@@ -198,8 +198,34 @@ export type PageId =
   | 'financials'
   | 'hr';
 
+export interface Employee {
+  id: string;
+  employeeNumber: string;
+  name: string;
+  nameAr: string;
+  phone: string;
+  nationalId?: string;
+  roleId?: string;
+  role: string;
+  roleAr: string;
+  department?: string;
+  contractType: 'full_time' | 'part_time' | 'hourly';
+  hireDate: string;
+  baseSalary: number; // الراتب الأساسي الشهري
+  hourlyRate: number; // معدل أجر الساعة
+  overtimeRate: number; // أجر الساعة الإضافية
+  monthlyIncentives?: number; // حوافز وبدلات شهرية
+  status: 'active' | 'on_leave' | 'suspended';
+  bankAccount?: string;
+  notes?: string;
+  avatarUrl?: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+
 export interface Shift {
   id: string;
+  employeeId?: string;
   employeeName: string;
   employeeNameAr: string;
   role: string;
@@ -208,6 +234,54 @@ export interface Shift {
   endTime: string;
   status: 'scheduled' | 'active' | 'completed' | 'absent';
   date: string;
+  checkIn?: string;
+  checkOut?: string;
+  hoursWorked?: number;
+  overtimeHours?: number;
+  geofenceStatus?: 'in_range' | 'late' | 'permitted' | 'absent';
+  notes?: string;
+}
+
+export interface ShiftTask {
+  id: string;
+  bucket: 'opening' | 'closing';
+  labelAr: string;
+  assignedTo: string;
+  employeeId?: string;
+  deadline: string;
+  completed: boolean;
+  hasProof: boolean;
+  note?: string;
+  date?: string;
+  proofUrl?: string;
+  completedAt?: string;
+}
+
+export interface ShiftHandoverReport {
+  id: string;
+  date: string;
+  shiftType: 'morning' | 'evening';
+  handoverNotes: string;
+  incidents: string;
+  signedBy: string;
+  createdAt: string;
+}
+
+export interface PayrollRecord {
+  id: string;
+  employeeId: string;
+  employeeNameAr: string;
+  roleAr: string;
+  period: string; // e.g. '2026-09'
+  baseSalary: number;
+  totalHours: number;
+  overtimeHours: number;
+  deductions: number;
+  incentives: number;
+  netSalary: number;
+  paid: boolean;
+  paidAt?: string;
+  paymentMethod?: 'cash' | 'bank' | 'vodafone_cash';
 }
 
 export interface Transaction {
@@ -271,6 +345,7 @@ export interface PermissionDefinition {
   nameEn: string;
   module: PermissionModule;
   descriptionAr: string;
+  routePath?: string;
 }
 
 export interface Role {

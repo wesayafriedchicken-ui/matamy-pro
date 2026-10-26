@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useApp } from '@/context/AppContext';
-import { Check, Clock, Flame, AlertCircle, ChefHat } from 'lucide-react';
+import { Check, Clock, Flame, AlertCircle, ChefHat, Trash2 } from 'lucide-react';
 import { formatTimer, getTimerColor, getTimerBg } from '@/utils/helpers';
 
 export default function KitchenDisplay() {
-  const { kdsTickets, advanceKdsTicket } = useApp();
+  const { kdsTickets, advanceKdsTicket, showToast } = useApp();
   const [, setTick] = useState(0);
 
   useEffect(() => {
@@ -17,42 +17,73 @@ export default function KitchenDisplay() {
     return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
   });
 
+  const priorityCount = sortedTickets.filter((t) => t.priority).length;
+
+  const handleClearAllTickets = () => {
+    if (sortedTickets.length === 0) return;
+    if (window.confirm('هل تريد تفريغ وإنجاز جميع التذاكر الحالية من شاشة المطبخ؟')) {
+      sortedTickets.forEach((t) => advanceKdsTicket(t.id));
+      showToast('تم إنجاز وتفريغ جميع تذاكر المطبخ بنجاح', 'info');
+    }
+  };
+
   return (
     <div className="h-full flex flex-col animate-fade-in">
       {/* KDS Header Bar */}
-      <div className="glass-card px-6 py-4 mb-4 flex items-center justify-between">
+      <div className="glass-card px-6 py-4 mb-4 flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
           <div className="w-11 h-11 rounded-2xl bg-brand-500/15 flex items-center justify-center">
             <ChefHat className="w-6 h-6 text-brand-400" />
           </div>
           <div>
             <h3 className="text-white font-bold text-lg">شاشة المطبخ</h3>
-            <p className="text-navy-400 text-sm">{sortedTickets.length} طلب قيد التحضير</p>
+            <p className="text-navy-400 text-sm">
+              {sortedTickets.length > 0
+                ? `${sortedTickets.length} طلب قيد التحضير`
+                : 'لا توجد طلبات قيد التحضير حالياً'}
+            </p>
           </div>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 bg-navy-800/60 px-3 py-2 rounded-xl">
-            <Flame className="w-4 h-4 text-brand-400" />
-            <span className="text-navy-200 text-sm font-medium">{sortedTickets.filter((t) => t.priority).length} أولوية</span>
+
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-2 bg-navy-800/60 px-3 py-2 rounded-xl border border-navy-700/50">
+            <Flame className={`w-4 h-4 ${priorityCount > 0 ? 'text-brand-400' : 'text-navy-500'}`} />
+            <span className="text-navy-200 text-sm font-medium">{priorityCount} أولوية</span>
           </div>
-          <div className="flex items-center gap-2 bg-navy-800/60 px-3 py-2 rounded-xl">
-            <Clock className="w-4 h-4 text-navy-300" />
-            <span className="text-navy-200 text-sm font-mono">{formatTimer(sortedTickets[0]?.createdAt ?? new Date().toISOString())}</span>
-            <span className="text-navy-400 text-xs">أقدم طلب</span>
-          </div>
+
+          {sortedTickets.length > 0 && (
+            <div className="flex items-center gap-2 bg-navy-800/60 px-3 py-2 rounded-xl border border-navy-700/50">
+              <Clock className="w-4 h-4 text-navy-300" />
+              <span className="text-navy-200 text-sm font-mono">{formatTimer(sortedTickets[0].createdAt)}</span>
+              <span className="text-navy-400 text-xs">أقدم طلب</span>
+            </div>
+          )}
+
+          {sortedTickets.length > 0 && (
+            <button
+              onClick={handleClearAllTickets}
+              className="btn-ghost text-xs text-navy-400 hover:text-danger-400 flex items-center gap-1.5 px-3 py-2"
+              title="إنجاز وتفريغ كل التذاكر"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              تفريغ الشاشة
+            </button>
+          )}
         </div>
       </div>
 
       {/* KDS Grid */}
       <div className="flex-1 overflow-y-auto">
         {sortedTickets.length === 0 ? (
-          <div className="glass-card h-full flex flex-col items-center justify-center gap-4">
-            <div className="w-20 h-20 rounded-3xl bg-success-500/10 flex items-center justify-center">
+          <div className="glass-card h-full min-h-[380px] flex flex-col items-center justify-center gap-4 p-8">
+            <div className="w-20 h-20 rounded-3xl bg-success-500/10 flex items-center justify-center border border-success-500/20">
               <Check className="w-10 h-10 text-success-400" />
             </div>
-            <div className="text-center">
-              <p className="text-white font-bold text-lg">لا توجد طلبات قيد التحضير</p>
-              <p className="text-navy-400 text-sm mt-1">جميع الطلبات تم إنجازها</p>
+            <div className="text-center max-w-md">
+              <p className="text-white font-bold text-xl mb-1">شاشة المطبخ فارغة وجاهزة</p>
+              <p className="text-navy-400 text-sm leading-relaxed">
+                لا توجد طلبات قيد التحضير حالياً. الطلبات الجديدة المسجلة من الكاشير أو التطبيق ستظهر هنا فورياً وتلقائياً.
+              </p>
             </div>
           </div>
         ) : (
@@ -82,7 +113,7 @@ export default function KitchenDisplay() {
                         <span className={`text-xs px-2 py-0.5 rounded-md ${
                           ticket.priority ? 'bg-brand-500/20 text-brand-400' : 'bg-navy-700/50 text-navy-300'
                         }`}>
-                          {ticket.stationAr}
+                          {ticket.stationAr || 'المطبخ'}
                         </span>
                       </div>
                     </div>
