@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   UtensilsCrossed,
@@ -8,6 +8,7 @@ import {
   EyeOff,
   ArrowRight,
   AlertCircle,
+  ShieldCheck,
 } from 'lucide-react';
 import { useApp } from '@/context/AppContext';
 
@@ -22,21 +23,28 @@ export default function Login() {
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
+  // If already logged in, redirect to /dashboard
+  useEffect(() => {
+    if (currentUser) {
+      navigate('/dashboard', { replace: true });
+    }
+  }, [currentUser, navigate]);
+
   const getLandingPath = (userIdent: string) => {
     const targetUser = users.find(
       (u) =>
         u.username.toLowerCase() === userIdent.toLowerCase() ||
         u.email.toLowerCase() === userIdent.toLowerCase()
     );
-    if (!targetUser) return '/';
+    if (!targetUser) return '/dashboard';
     const userRole = roles.find((r) => r.id === targetUser.roleId);
-    if (!userRole) return '/';
+    if (!userRole) return '/dashboard';
     if (
       userRole.id === 'role-admin' ||
       userRole.permissions.includes('*') ||
       userRole.permissions.includes('dashboard.view')
     ) {
-      return '/';
+      return '/dashboard';
     }
     if (userRole.permissions.includes('dispatch.view')) return '/dispatch';
     if (userRole.permissions.includes('kds.view')) return '/kds';
@@ -45,7 +53,7 @@ export default function Login() {
     if (userRole.permissions.includes('financials.view') || userRole.permissions.includes('financials.manage')) {
       return '/financials/cash-drawer';
     }
-    return '/';
+    return '/dashboard';
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -218,16 +226,12 @@ export default function Login() {
           </form>
         </div>
 
-        {/* Footer info & link */}
+        {/* Footer info & security badge */}
         <div className="mt-6 text-center space-y-2">
-          <button
-            type="button"
-            onClick={() => navigate('/')}
-            className="text-xs text-navy-400 hover:text-white transition-colors inline-flex items-center gap-1.5 font-medium"
-          >
-            <ArrowRight className="w-3.5 h-3.5 rotate-180" />
-            <span>تخطي والتوجه مباشرة إلى لوحة العمليات</span>
-          </button>
+          <p className="text-xs text-navy-400 font-medium flex items-center justify-center gap-1.5">
+            <ShieldCheck className="w-4 h-4 text-emerald-400" />
+            <span>نظام محمي ومشفر — يتطلب تسجيل الدخول للوصول إلى لوحة العمليات</span>
+          </p>
           <p className="text-[11px] text-navy-500 font-mono">
             مطعمي برو v2.4 • متصل بقاعدة بيانات العمليات
           </p>

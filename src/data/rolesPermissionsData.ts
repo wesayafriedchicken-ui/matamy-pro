@@ -8,7 +8,7 @@ export const PERMISSION_MODULE_LABELS: Record<
     labelAr: 'لوحة التحكم والتحليلات',
     labelEn: 'Dashboard & Analytics',
     icon: 'LayoutDashboard',
-    routePath: '/',
+    routePath: '/dashboard',
     descriptionAr: 'مؤشرات الأداء اللحظية، الإيرادات، المبيعات الساعية، وحالة النشاط',
   },
   orders: {
@@ -86,7 +86,7 @@ export const SYSTEM_PERMISSIONS: PermissionDefinition[] = [
     nameAr: 'عرض لوحة التحكم الرئيسية',
     nameEn: 'View Dashboard',
     module: 'dashboard',
-    routePath: '/',
+    routePath: '/dashboard',
     descriptionAr: 'الاطلاع على الصفحة الرئيسية وملخص أداء المطعم اليومي',
   },
   {
@@ -95,7 +95,7 @@ export const SYSTEM_PERMISSIONS: PermissionDefinition[] = [
     nameAr: 'الاطلاع على مبيعات وأرباح اليوم',
     nameEn: 'View Revenue & Net Profit',
     module: 'dashboard',
-    routePath: '/',
+    routePath: '/dashboard',
     descriptionAr: 'عرض إجمالي الإيرادات وصافي الربح المحقق في بطاقات الأداء',
   },
   {
@@ -104,7 +104,7 @@ export const SYSTEM_PERMISSIONS: PermissionDefinition[] = [
     nameAr: 'متابعة رسم المبيعات الساعية اللحظي',
     nameEn: 'View Hourly Sales Breakdown',
     module: 'dashboard',
-    routePath: '/',
+    routePath: '/dashboard',
     descriptionAr: 'الاطلاع على منحنى توزيع المبيعات لكل ساعة تشغيل خلال اليوم',
   },
   {
@@ -113,7 +113,7 @@ export const SYSTEM_PERMISSIONS: PermissionDefinition[] = [
     nameAr: 'الاطلاع على تنبيهات نواقص المخزون',
     nameEn: 'View Low Stock Alerts Widget',
     module: 'dashboard',
-    routePath: '/',
+    routePath: '/dashboard',
     descriptionAr: 'مشاهدة قائمة الأصناف التي قاربت على النفاد من الصفحة الرئيسية',
   },
   {
@@ -122,7 +122,7 @@ export const SYSTEM_PERMISSIONS: PermissionDefinition[] = [
     nameAr: 'متابعة عدادات حالة أسطول المناديب',
     nameEn: 'View Delivery Fleet Quick Status',
     module: 'dashboard',
-    routePath: '/',
+    routePath: '/dashboard',
     descriptionAr: 'الاطلاع على عدد المناديب المتاحين، المشغولين، وغير المتصلين',
   },
 

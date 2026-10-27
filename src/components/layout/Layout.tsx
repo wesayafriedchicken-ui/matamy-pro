@@ -5,7 +5,7 @@ import TopBar from './TopBar';
 import ToastContainer from '@/components/shared/ToastContainer';
 
 const pageMeta: Record<string, { title: string; subtitle: string }> = {
-  '/': { title: 'نظرة عامة', subtitle: 'ملخص أداء المطعم اليوم' },
+  '/dashboard': { title: 'نظرة عامة', subtitle: 'ملخص أداء المطعم اليوم' },
   '/orders': { title: 'الطلبات اللحظية', subtitle: 'متابعة الطلبات في الوقت الفعلي' },
   '/orders/new': { title: 'إنشاء طلب جديد (POS)', subtitle: 'نقطة البيع وتسجيل الطلبات المباشرة' },
   '/kds': { title: 'شاشة المطبخ', subtitle: 'نظام عرض الطلبات للمطبخ' },

@@ -88,7 +88,7 @@ export default function GlobalSearchModal({
         title: 'لوحة التحكم والمؤشرات الرئيسية (Dashboard)',
         subtitle: 'ملخص أداء المطعم، المبيعات اليومية، والطلبات الجارية',
         badge: 'رئيسي',
-        link: '/',
+        link: '/dashboard',
         icon: LayoutDashboard,
       },
       {

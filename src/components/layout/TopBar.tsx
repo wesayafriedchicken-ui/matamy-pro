@@ -14,7 +14,6 @@ import {
   LogOut,
   ShieldCheck,
   ChevronDown,
-  Check,
   User,
 } from 'lucide-react';
 import { useApp } from '@/context/AppContext';
@@ -44,7 +43,7 @@ export default function TopBar({ title, subtitle }: TopBarProps) {
     roles,
     users,
     logout,
-    setCurrentUser,
+    hasPermission,
   } = useApp();
 
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
@@ -394,69 +393,44 @@ export default function TopBar({ title, subtitle }: TopBarProps) {
                   </div>
                 </div>
 
-                {/* Quick Navigation Links */}
-                <div className="space-y-1 py-1 border-b border-navy-800/80">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsUserMenuOpen(false);
-                      navigate('/users');
-                    }}
-                    className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs text-navy-200 hover:text-white hover:bg-navy-800/80 transition-colors"
-                  >
-                    <div className="flex items-center gap-2">
-                      <User className="w-4 h-4 text-brand-400" />
-                      <span>إدارة المستخدمين والحسابات</span>
-                    </div>
-                    <span className="text-[10px] text-navy-400 font-mono">{users.length}</span>
-                  </button>
+                {/* Navigation Links (Protected by permissions) */}
+                {(hasPermission('users.manage') || hasPermission('roles.manage')) && (
+                  <div className="space-y-1 py-1 border-b border-navy-800/80">
+                    {hasPermission('users.manage') && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsUserMenuOpen(false);
+                          navigate('/users');
+                        }}
+                        className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs text-navy-200 hover:text-white hover:bg-navy-800/80 transition-colors"
+                      >
+                        <div className="flex items-center gap-2">
+                          <User className="w-4 h-4 text-brand-400" />
+                          <span>إدارة المستخدمين والحسابات</span>
+                        </div>
+                        <span className="text-[10px] text-navy-400 font-mono">{users.length}</span>
+                      </button>
+                    )}
 
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsUserMenuOpen(false);
-                      navigate('/users/roles');
-                    }}
-                    className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs text-navy-200 hover:text-white hover:bg-navy-800/80 transition-colors"
-                  >
-                    <div className="flex items-center gap-2">
-                      <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                      <span>الأدوار ومصفوفة الصلاحيات</span>
-                    </div>
-                    <span className="text-[10px] text-navy-400 font-mono">{roles.length}</span>
-                  </button>
-                </div>
-
-                {/* Quick Profile Switcher (Helpful for test and demo) */}
-                <div className="py-2 border-b border-navy-800/80">
-                  <p className="text-[10px] text-navy-400 font-semibold px-2 mb-1.5">تبديل الحساب السريع لاختبار الصلاحيات:</p>
-                  <div className="space-y-1 max-h-48 overflow-y-auto no-scrollbar">
-                    {users
-                      .filter((u) => u.status === 'active')
-                      .map((u) => {
-                        const isCurrent = currentUser?.id === u.id;
-                        const roleObj = roles.find((r) => r.id === u.roleId);
-                        return (
-                          <button
-                            key={u.id}
-                            type="button"
-                            onClick={() => {
-                              setCurrentUser(u);
-                              setIsUserMenuOpen(false);
-                            }}
-                            className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs transition-colors cursor-pointer ${
-                              isCurrent
-                                ? 'bg-brand-500/20 text-brand-400 font-bold border border-brand-500/30'
-                                : 'text-navy-300 hover:bg-navy-800/60 hover:text-white'
-                            }`}
-                          >
-                            <span className="truncate">{u.nameAr} ({roleObj?.nameAr.split(' ')[0] || 'عضو'})</span>
-                            {isCurrent && <Check className="w-3.5 h-3.5 text-brand-400 shrink-0" />}
-                          </button>
-                        );
-                      })}
+                    {hasPermission('roles.manage') && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsUserMenuOpen(false);
+                          navigate('/users/roles');
+                        }}
+                        className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs text-navy-200 hover:text-white hover:bg-navy-800/80 transition-colors"
+                      >
+                        <div className="flex items-center gap-2">
+                          <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                          <span>الأدوار ومصفوفة الصلاحيات</span>
+                        </div>
+                        <span className="text-[10px] text-navy-400 font-mono">{roles.length}</span>
+                      </button>
+                    )}
                   </div>
-                </div>
+                )}
 
                 {/* Logout Action */}
                 <div className="pt-2">
@@ -465,7 +439,7 @@ export default function TopBar({ title, subtitle }: TopBarProps) {
                     onClick={() => {
                       setIsUserMenuOpen(false);
                       logout();
-                      navigate('/login');
+                      navigate('/');
                     }}
                     className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs text-danger-400 hover:text-white hover:bg-danger-500/20 border border-danger-500/20 transition-all font-semibold"
                   >

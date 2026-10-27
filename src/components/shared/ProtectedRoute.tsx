@@ -19,7 +19,7 @@ export default function ProtectedRoute({
 
   useEffect(() => {
     if (!currentUser) {
-      navigate('/login', { replace: true });
+      navigate('/', { replace: true });
     }
   }, [currentUser, navigate]);
 
@@ -89,7 +89,7 @@ export default function ProtectedRoute({
 
             <button
               type="button"
-              onClick={() => navigate('/')}
+              onClick={() => navigate('/dashboard')}
               className="w-full btn-ghost py-2.5 text-xs font-bold flex items-center justify-center gap-2 cursor-pointer border border-navy-700 hover:border-navy-600"
             >
               <ArrowRight className="w-4 h-4 rotate-180" />

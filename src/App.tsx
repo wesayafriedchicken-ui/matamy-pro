@@ -38,12 +38,13 @@ export default function App() {
     <AppProvider>
       <BrowserRouter>
         <Routes>
+          <Route path="/" element={<Login />} />
           <Route path="/login" element={<Login />} />
           <Route element={<Layout />}>
             <Route
-              path="/"
+              path="/dashboard"
               element={
-                <ProtectedRoute requiredPermission="dashboard.view" pageTitleAr="لوحة التحكم الرئيسية">
+                <ProtectedRoute requiredPermission="dashboard.view" pageTitleAr="لوحة التحكم الرئيسية (نظرة عامة)">
                   <Dashboard />
                 </ProtectedRoute>
               }

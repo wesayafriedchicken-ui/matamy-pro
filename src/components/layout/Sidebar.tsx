@@ -40,7 +40,7 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { id: 'dashboard', labelAr: 'نظرة عامة', labelEn: 'Dashboard', icon: LayoutDashboard, path: '/', requiredPermission: 'dashboard.view' },
+  { id: 'dashboard', labelAr: 'نظرة عامة', labelEn: 'Dashboard', icon: LayoutDashboard, path: '/dashboard', requiredPermission: 'dashboard.view' },
   {
     id: 'live-orders',
     labelAr: 'الطلبات اللحظية',

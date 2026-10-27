@@ -456,7 +456,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } catch (e) {
       console.warn('Failed to parse current user:', e);
     }
-    return defaultUsers[0] || null;
+    return null; // Require login first on route / for higher system security
   });
 
   const setCurrentUser = useCallback((user: AppUser | null) => {
@@ -561,11 +561,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [theme]);
 
-  // Notifications State
+  // Notifications State (Real operational notifications only)
   const [notifications, setNotifications] = useState<AppNotification[]>(() => {
     try {
       const saved = localStorage.getItem('app_notifications');
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          // Remove any legacy dummy mock notifications ('notif-1' through 'notif-5')
+          const realNotifications = parsed.filter(
+            (n) => !['notif-1', 'notif-2', 'notif-3', 'notif-4', 'notif-5'].includes(n.id)
+          );
+          return realNotifications;
+        }
+      }
     } catch {
       // ignore
     }
@@ -577,7 +586,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const markNotificationAsRead = useCallback((id: string) => {
     setNotifications((prev) => {
       const updated = prev.map((n) => (n.id === id ? { ...n, read: true } : n));
-      localStorage.setItem('app_notifications', JSON.stringify(updated));
+      try {
+        localStorage.setItem('app_notifications', JSON.stringify(updated));
+      } catch {
+        // ignore
+      }
       return updated;
     });
   }, []);
@@ -585,7 +598,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const markAllNotificationsAsRead = useCallback(() => {
     setNotifications((prev) => {
       const updated = prev.map((n) => ({ ...n, read: true }));
-      localStorage.setItem('app_notifications', JSON.stringify(updated));
+      try {
+        localStorage.setItem('app_notifications', JSON.stringify(updated));
+      } catch {
+        // ignore
+      }
       return updated;
     });
     showToast('تم تحديد جميع الإشعارات كمقروءة', 'info');
@@ -593,20 +610,31 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const clearAllNotifications = useCallback(() => {
     setNotifications([]);
-    localStorage.setItem('app_notifications', JSON.stringify([]));
+    try {
+      localStorage.setItem('app_notifications', JSON.stringify([]));
+    } catch {
+      // ignore
+    }
     showToast('تم مسح جميع الإشعارات', 'info');
   }, [showToast]);
 
   const addNotification = useCallback((notif: Omit<AppNotification, 'id' | 'timestamp' | 'read'>) => {
     const newNotif: AppNotification = {
       ...notif,
-      id: `notif-${Date.now()}`,
+      id: `notif-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
       timestamp: 'الآن',
       read: false,
     };
     setNotifications((prev) => {
-      const updated = [newNotif, ...prev];
-      localStorage.setItem('app_notifications', JSON.stringify(updated));
+      // Prevent duplicates in quick succession
+      const isDuplicate = prev.slice(0, 5).some((p) => p.titleAr === newNotif.titleAr && p.messageAr === newNotif.messageAr);
+      if (isDuplicate) return prev;
+      const updated = [newNotif, ...prev.slice(0, 49)];
+      try {
+        localStorage.setItem('app_notifications', JSON.stringify(updated));
+      } catch {
+        // ignore
+      }
       return updated;
     });
   }, []);
@@ -844,9 +872,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
       });
     }
 
+    // Operational Real Notification
+    const orderTypeLabel =
+      order.type === 'dine_in'
+        ? 'صالة'
+        : order.type === 'takeaway'
+        ? 'تيك أوي'
+        : order.type === 'talabat'
+        ? 'أبلكيشن طلبات'
+        : 'توصيل منزلي';
+    addNotification({
+      title: `طلب جديد #${order.orderNumber}`,
+      titleAr: `طلب جديد #${order.orderNumber}`,
+      message: `تم إنشاء طلب جديد (${orderTypeLabel}) بإجمالي ${order.total} ج.م`,
+      messageAr: `تم إنشاء طلب جديد (${orderTypeLabel}) بإجمالي ${order.total} ج.م`,
+      type: 'order',
+      link: `/orders/${order.id}`,
+    });
+
     showToast(`تم إنشاء الطلب ${order.orderNumber} بنجاح`, 'success');
     dbCreateOrder(order);
-  }, [showToast]);
+  }, [addNotification, showToast]);
 
   const updateOrder = useCallback((order: Order) => {
     setOrders((prev) => {
@@ -886,7 +932,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [showToast]);
 
   const updateOrderStatus = useCallback((orderId: string, status: Order['status']) => {
+    let orderNum = orderId;
     setOrders((prev) => {
+      const found = prev.find((o) => o.id === orderId);
+      if (found) orderNum = found.orderNumber;
       const updated = prev.map((o) =>
         o.id === orderId ? { ...o, status, updatedAt: new Date().toISOString() } : o,
       );
@@ -897,6 +946,35 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
       return updated;
     });
+
+    if (status === 'ready') {
+      addNotification({
+        title: `طلب جاهز بالمطبخ #${orderNum}`,
+        titleAr: `طلب جاهز بالمطبخ #${orderNum}`,
+        message: 'اكتمل تحضير الطلب في شاشة المطبخ (KDS) وجاهز للتسليم',
+        messageAr: 'اكتمل تحضير الطلب في شاشة المطبخ (KDS) وجاهز للتسليم',
+        type: 'kds',
+        link: '/kds',
+      });
+    } else if (status === 'out_for_delivery') {
+      addNotification({
+        title: `خرج للتوصيل #${orderNum}`,
+        titleAr: `خرج للتوصيل #${orderNum}`,
+        message: 'تم تسليم الطلب للمندوب وهو في الطريق للعميل',
+        messageAr: 'تم تسليم الطلب للمندوب وهو في الطريق للعميل',
+        type: 'delivery',
+        link: '/dispatch/tracking',
+      });
+    } else if (status === 'completed') {
+      addNotification({
+        title: `اكتمل الطلب #${orderNum}`,
+        titleAr: `اكتمل الطلب #${orderNum}`,
+        message: 'تم تسليم الطلب وتحصيل الحساب بنجاح',
+        messageAr: 'تم تسليم الطلب وتحصيل الحساب بنجاح',
+        type: 'order',
+        link: `/orders/${orderId}`,
+      });
+    }
 
     if (status === 'completed' || status === 'cancelled') {
       setKdsTickets((prev) => {
@@ -911,10 +989,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
 
     dbUpdateOrderStatus(orderId, status);
-  }, []);
+  }, [addNotification]);
 
   const assignRider = useCallback((orderId: string, riderId: string, riderName: string) => {
+    let orderNum = orderId;
     setOrders((prev) => {
+      const found = prev.find((o) => o.id === orderId);
+      if (found) orderNum = found.orderNumber;
       const updated = prev.map((o) =>
         o.id === orderId ? { ...o, riderId, riderName } : o,
       );
@@ -925,9 +1006,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
       return updated;
     });
+
+    addNotification({
+      title: 'إسناد مهمة توصيل',
+      titleAr: 'إسناد مهمة توصيل',
+      message: `تم إسناد الطلب #${orderNum} للمندوب (${riderName})`,
+      messageAr: `تم إسناد الطلب #${orderNum} للمندوب (${riderName})`,
+      type: 'delivery',
+      link: '/dispatch/tracking',
+    });
+
     showToast(`تم تعيين السائق ${riderName} للطلب`, 'info');
     dbAssignRider(orderId, riderId, riderName);
-  }, [showToast]);
+  }, [addNotification, showToast]);
 
   const addRider = useCallback((rider: Rider) => {
     setRiders((prev) => [...prev, rider]);
@@ -1052,12 +1143,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (i.id === itemId) {
           const newStock = Math.max(0, Math.round((i.currentStock + delta) * 100) / 100);
           dbAdjustStock(itemId, newStock);
+          if (newStock <= i.minReorderLevel) {
+            addNotification({
+              title: 'تنبيه هبوط المخزون',
+              titleAr: 'تنبيه هبوط المخزون',
+              message: `المادة (${i.nameAr}) وصلت للحد الأدنى للمخزون (المتبقي: ${newStock} ${i.unitAr})`,
+              messageAr: `المادة (${i.nameAr}) وصلت للحد الأدنى للمخزون (المتبقي: ${newStock} ${i.unitAr})`,
+              type: 'inventory',
+              link: '/inventory',
+            });
+          }
           return { ...i, currentStock: newStock };
         }
         return i;
       }),
     );
-  }, []);
+  }, [addNotification]);
 
   const addInventoryCategory = useCallback(
     (labelAr: string, customId?: string) => {
@@ -1316,9 +1417,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
         return updated;
       });
+
+      addNotification({
+        title: tx.type === 'income' ? 'إيداع نقدي بالخزينة' : 'مصروف / حركة صرف',
+        titleAr: tx.type === 'income' ? 'إيداع نقدي بالخزينة' : 'مصروف / حركة صرف',
+        message: `${tx.descriptionAr || tx.description} بقيمة ${tx.amount.toLocaleString()} ج.م (${tx.categoryAr || tx.category})`,
+        messageAr: `${tx.descriptionAr || tx.description} بقيمة ${tx.amount.toLocaleString()} ج.م (${tx.categoryAr || tx.category})`,
+        type: 'finance',
+        link: '/financials/cash-drawer',
+      });
+
       return await dbCreateTransaction(tx);
     },
-    [],
+    [addNotification],
   );
 
   const deleteTransaction = useCallback(
