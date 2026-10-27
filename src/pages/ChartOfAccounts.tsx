@@ -6,7 +6,7 @@ import {
   Plus, Search, X, Save, Building2,
   CreditCard, Package, Truck, Scale, Banknote, Wrench,
   Users, Percent, TrendingUp, Store, Bike, UtensilsCrossed,
-  Home, Zap, Receipt, Edit3, Trash2, RotateCcw,
+  Home, Zap, Receipt, Edit3, Trash2,
 } from 'lucide-react';
 import { formatCurrency } from '@/utils/helpers';
 import PageHeader from '@/components/shared/PageHeader';
@@ -337,16 +337,6 @@ export default function ChartOfAccounts() {
     }
   };
 
-  // Reset to clean zero-balance chart
-  const handleResetToZero = () => {
-    if (window.confirm('هل تريد إعادة تعيين الشجرة المحاسبية إلى الهيكل القياسي مع تصفير كافة الأرصدة (0.00 ج.م)؟')) {
-      const clean = computeTreeBalances(defaultAccountTree);
-      setTree(clean);
-      localStorage.setItem('nine_fries_chart_of_accounts_v2', JSON.stringify(clean));
-      showToast('تم تصفير الشجرة المحاسبية وإعادة ضبطها بأرصدة 0.00 ج.م', 'info');
-    }
-  };
-
   const renderNode = (node: AccountNode, depth: number): React.ReactNode => {
     if (!nodeHasMatch(node)) return null;
     const isExpanded = expanded.has(node.code) || (!!search && nodeHasMatch(node));
@@ -483,14 +473,6 @@ export default function ChartOfAccounts() {
         >
           <Plus className="w-4 h-4" />
           إضافة حساب فرعي
-        </button>
-        <button
-          onClick={handleResetToZero}
-          className="btn-ghost flex items-center gap-2 text-xs text-navy-300 hover:text-white"
-          title="تصفير كافة الأرصدة إلى 0.00 ج.م"
-        >
-          <RotateCcw className="w-3.5 h-3.5" />
-          تصفير الأرصدة الافتراضية
         </button>
       </div>
 

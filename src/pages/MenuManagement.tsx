@@ -98,31 +98,7 @@ export default function MenuManagement() {
         title="المنيو والأصناف (Nine Fries)"
         description="إدارة قائمة أسعار ناين فرايز الرسمية، خيارات التخصيص، تكلفة المكونات، وتتبع الوجبات"
         actions={
-          <div className="flex items-center gap-2 flex-wrap">
-            <button
-              onClick={() => setShowMenuBoardModal(true)}
-              className="btn-ghost flex items-center gap-2 border border-brand-500/40 hover:bg-brand-500/10 text-brand-300 hover:text-white px-3.5 py-2 text-xs font-semibold rounded-xl"
-              title="عرض صورة المنيو 4K الرسمية لناين فرايز"
-            >
-              <Eye className="w-4 h-4 text-brand-400" />
-              <span>صورة المنيو 4K الأصلية</span>
-            </button>
-            <button
-              onClick={() => setShowDeleteAllConfirm(true)}
-              className="btn-ghost flex items-center gap-2 border border-danger-500/30 hover:border-danger-500 hover:bg-danger-500/10 text-danger-300 hover:text-danger-200 px-3.5 py-2 text-xs font-semibold rounded-xl"
-              title="مسح كافة الأصناف الموجودة في المنيو حالياً"
-            >
-              <Trash2 className="w-4 h-4 text-danger-400" />
-              <span>مسح كل الأصناف</span>
-            </button>
-            <button
-              onClick={() => setShowResetConfirm(true)}
-              className="btn-ghost flex items-center gap-2 border border-navy-700 hover:border-brand-500/40 text-navy-200 hover:text-white px-3.5 py-2 text-xs font-semibold rounded-xl"
-              title="تطبيق الـ 37 صنف المعتمدة من قائمة ناين فرايز المرفقة"
-            >
-              <RotateCcw className="w-4 h-4 text-brand-400" />
-              <span>تطبيق منيو ناين فرايز (37 صنف)</span>
-            </button>
+          <div className="flex items-center gap-2">
             <button
               onClick={() => {
                 setEditingItem(null);

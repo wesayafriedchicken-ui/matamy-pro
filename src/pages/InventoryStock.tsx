@@ -285,14 +285,6 @@ export default function InventoryStock() {
         actions={
           <div className="flex items-center gap-2">
             <button
-              onClick={() => setShowResetConfirm(true)}
-              className="btn-ghost flex items-center gap-2 border border-navy-700/80 hover:border-brand-500/40 text-navy-200 hover:text-white px-3.5 py-2 text-xs font-semibold rounded-xl"
-              title="استعادة الـ 45 مادة خام من القائمة الرسمية"
-            >
-              <RotateCcw className="w-4 h-4 text-brand-400" />
-              استعادة القائمة الرسمية
-            </button>
-            <button
               onClick={() => { setEditingItem(null); setShowForm(true); }}
               className="btn-primary flex items-center gap-2 text-xs font-bold px-4 py-2 rounded-xl"
             >
