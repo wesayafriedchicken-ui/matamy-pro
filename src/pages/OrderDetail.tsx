@@ -11,6 +11,8 @@ import {
 import { statusConfig, channelConfig, formatCurrency, getElapsedMinutes } from '@/utils/helpers';
 import StatusBadge from '@/components/shared/StatusBadge';
 import DeliveryTypeBadge from '@/components/shared/DeliveryTypeBadge';
+import { printThermalReceipts } from '@/utils/thermalPrinter';
+import ThermalReceiptModal from '@/components/shared/ThermalReceiptModal';
 
 const statusFlow: OrderStatus[] = ['new', 'in_kitchen', 'ready', 'out_for_delivery', 'completed'];
 
@@ -67,10 +69,11 @@ function getTimelineProgress(status: OrderStatus): number {
 export default function OrderDetail() {
   const { orderId } = useParams<{ orderId: string }>();
   const navigate = useNavigate();
-  const { orders, menuItems, inventory, riders, updateOrderStatus, assignRider, showToast } = useApp();
+  const { orders, menuItems, inventory, riders, updateOrderStatus, assignRider, showToast, currentUser } = useApp();
   const [showBom, setShowBom] = useState(false);
   const [riderProgress, setRiderProgress] = useState(0);
   const [selectedRider, setSelectedRider] = useState('');
+  const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
 
   const order = orders.find((o) => o.id === orderId);
 
@@ -194,9 +197,18 @@ export default function OrderDetail() {
           </div>
 
           <div className="flex items-center gap-2">
-            <button className="btn-ghost flex items-center gap-2 text-sm">
-              <Printer className="w-4 h-4" />
-              طباعة الفاتورة
+            <button
+              onClick={() => {
+                if (order) {
+                  printThermalReceipts(order, { cashierName: currentUser?.nameAr || 'احمد', mode: 'both' });
+                  setIsPrintModalOpen(true);
+                }
+              }}
+              className="btn-ghost flex items-center gap-2 text-sm border border-navy-700/80 hover:border-brand-500/40 text-navy-200 hover:text-white"
+              title="طباعة إيصال العميل وبون المطبخ على طابعة Xprinter 80mm"
+            >
+              <Printer className="w-4 h-4 text-brand-400" />
+              <span>طباعة الفاتورة (80mm)</span>
             </button>
             {canAdvance && (
               <button onClick={handleAdvance} className="btn-primary flex items-center gap-2 text-sm">
@@ -642,6 +654,16 @@ export default function OrderDetail() {
             إلغاء الطلب
           </button>
         </div>
+      )}
+
+      {/* Thermal Receipt Print Modal */}
+      {order && (
+        <ThermalReceiptModal
+          isOpen={isPrintModalOpen}
+          onClose={() => setIsPrintModalOpen(false)}
+          order={order}
+          cashierName={currentUser?.nameAr || 'احمد'}
+        />
       )}
     </div>
   );

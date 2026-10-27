@@ -27,10 +27,13 @@ import {
   Compass,
   Smartphone,
   MessageSquare,
+  Printer,
 } from 'lucide-react';
 import { formatCurrency } from '@/utils/helpers';
 import { defaultDeliveryZones } from '@/data/deliveryZonesData';
 import type { OfficialDeliveryZone } from '@/types';
+import { printOrderReceipt, printThermalReceipts, sampleTestOrder } from '@/utils/thermalPrinter';
+import ThermalReceiptModal from '@/components/shared/ThermalReceiptModal';
 
 interface CartEntry {
   menuItemId: string;
@@ -41,7 +44,19 @@ interface CartEntry {
 
 export default function CreateOrder() {
   const navigate = useNavigate();
-  const { menuItems, addOrder, showToast, taxRate, showZeroVatInCart } = useApp();
+  const { menuItems, addOrder, showToast, taxRate, showZeroVatInCart, currentUser } = useApp();
+
+  const [receiptModalOrder, setReceiptModalOrder] = useState<Order | null>(null);
+  const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
+  const [autoPrintThermal, setAutoPrintThermal] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('nine_fries_autoprint_thermal');
+      if (saved !== null) return saved === 'true';
+    } catch {
+      // fallback
+    }
+    return true; // Enabled by default as requested
+  });
 
   const [deliveryType, setDeliveryType] = useState<DeliveryType>('dine_in');
   const [channel, setChannel] = useState<OrderChannel>('pos');
@@ -251,7 +266,38 @@ export default function CreateOrder() {
     };
 
     addOrder(newOrder);
-    navigate('/orders');
+
+    // Automatically trigger thermal printing of both receipts on Xprinter 80mm
+    if (autoPrintThermal) {
+      printOrderReceipt(newOrder, {
+        cashierName: currentUser?.nameAr || 'احمد',
+        mode: 'both',
+        guestsCount: deliveryType === 'dine_in' ? 2 : 1,
+      });
+    }
+
+    // Open receipt modal with live preview and reprint options
+    setReceiptModalOrder(newOrder);
+    setIsReceiptModalOpen(true);
+    showToast(`تم تأكيد الطلب ${newOrder.orderNumber} وإرسال أمر الطباعة لطابعة Xprinter`, 'success');
+
+    // Reset current form for next order
+    setCart([]);
+    setCustomerName('');
+    setCustomerPhone('');
+    setCustomerWhatsapp('');
+    setAddress('');
+    setOrderNotes('');
+  };
+
+  const handleTestPrint = () => {
+    printThermalReceipts(sampleTestOrder, {
+      cashierName: currentUser?.nameAr || 'احمد',
+      mode: 'both',
+    });
+    setReceiptModalOrder(sampleTestOrder);
+    setIsReceiptModalOpen(true);
+    showToast('تم إرسال أمر اختبار الطباعة إلى طابعة Xprinter 80mm', 'info');
   };
 
   const tables = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '14', '15', 'VIP-1', 'VIP-2'];
@@ -281,7 +327,17 @@ export default function CreateOrder() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2 self-end sm:self-auto">
+        <div className="flex items-center gap-2 self-end sm:self-auto flex-wrap">
+          <button
+            type="button"
+            onClick={handleTestPrint}
+            className="px-3.5 py-2 rounded-xl bg-navy-800 hover:bg-brand-500/15 text-brand-400 hover:text-brand-300 text-xs font-bold border border-brand-500/30 transition-all flex items-center gap-1.5 shadow-sm"
+            title="اختبار طباعة إيصال العميل وبون المطبخ على طابعة Xprinter 80mm"
+          >
+            <Printer className="w-4 h-4" />
+            <span>اختبار الطباعة (Xprinter 80mm)</span>
+          </button>
+
           {cart.length > 0 && (
             <button
               onClick={handleClearCart}
@@ -1064,6 +1120,33 @@ export default function CreateOrder() {
               </div>
             </div>
 
+            {/* Auto-print thermal indicator */}
+            <div className="bg-navy-900/60 p-2.5 rounded-xl border border-navy-700/50 flex items-center justify-between text-xs">
+              <label className="flex items-center gap-2 text-navy-200 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={autoPrintThermal}
+                  onChange={(e) => {
+                    const val = e.target.checked;
+                    setAutoPrintThermal(val);
+                    try {
+                      localStorage.setItem('nine_fries_autoprint_thermal', String(val));
+                    } catch {
+                      // ignore
+                    }
+                  }}
+                  className="rounded border-navy-700 text-brand-500 focus:ring-brand-500/30 bg-navy-950 w-4 h-4 cursor-pointer"
+                />
+                <span className="flex items-center gap-1.5 font-medium text-[11px]">
+                  <Printer className="w-3.5 h-3.5 text-brand-400" />
+                  طباعة الإيصالين تلقائياً (Xprinter 80mm)
+                </span>
+              </label>
+              <span className="text-[10px] text-emerald-400 font-mono bg-emerald-500/15 px-1.5 py-0.5 rounded border border-emerald-500/30">
+                إيصالين (2)
+              </span>
+            </div>
+
             {/* Submit Button */}
             <button
               type="button"
@@ -1072,7 +1155,7 @@ export default function CreateOrder() {
               className="btn-primary w-full py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-brand-500/30 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
             >
               <Check className="w-5 h-5" />
-              تأكيد الطلب وإرساله للمطبخ
+              <span>تأكيد الطلب وإرساله للمطبخ </span>
             </button>
           </div>
         </div>
@@ -1195,6 +1278,15 @@ export default function CreateOrder() {
           </div>
         </div>
       )}
+
+      {/* Thermal Receipt Print & Preview Modal */}
+      <ThermalReceiptModal
+        isOpen={isReceiptModalOpen}
+        onClose={() => setIsReceiptModalOpen(false)}
+        order={receiptModalOrder}
+        cashierName={currentUser?.nameAr || 'احمد'}
+        isAutoPrinted={autoPrintThermal}
+      />
     </div>
   );
 }
