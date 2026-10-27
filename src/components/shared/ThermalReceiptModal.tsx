@@ -82,7 +82,7 @@ export default function ThermalReceiptModal({
                 </span>
               </div>
               <p className="text-navy-400 text-xs mt-0.5">
-                طابعة الفواتير Xprinter XP-Q833L (عرض الورق 80mm) • الطلب {order.orderNumber}
+                طابعة الفواتير Xprinter (ورق 80mm) • طباعة وقص كل إيصال بشكل مستقل ✂️ • الطلب {order.orderNumber}
               </p>
             </div>
           </div>
@@ -170,26 +170,26 @@ export default function ThermalReceiptModal({
             <button
               onClick={handlePrintCustomer}
               className="btn-ghost text-xs px-3 py-1.5 flex items-center gap-1.5 border border-navy-700/70"
-              title="طباعة إيصال العميل فقط"
+              title="طباعة إيصال العميل وقصه تلقائياً بشكل مستقل"
             >
               <Receipt className="w-3.5 h-3.5 text-blue-400" />
-              <span>طباعة العميل فقط</span>
+              <span>إيصال العميل (مستقل)</span>
             </button>
             <button
               onClick={handlePrintKitchen}
               className="btn-ghost text-xs px-3 py-1.5 flex items-center gap-1.5 border border-navy-700/70"
-              title="طباعة بون المطبخ فقط"
+              title="طباعة بون المطبخ وقصه تلقائياً بشكل مستقل"
             >
               <UtensilsCrossed className="w-3.5 h-3.5 text-emerald-400" />
-              <span>طباعة المطبخ فقط</span>
+              <span>بون المطبخ (مستقل)</span>
             </button>
             <button
               onClick={handlePrintBoth}
               className="btn-primary text-xs px-4 py-2 font-bold flex items-center gap-1.5 shadow-lg shadow-brand-500/25"
-              title="طباعة الإيصالين معاً على طابعة Xprinter 80mm"
+              title="طباعة الإيصالين على التوالي مع قص تلقائي مستقل لكل إيصال"
             >
               <Printer className="w-4 h-4" />
-              <span>طباعة الإيصالين الآن</span>
+              <span>طباعة الإيصالين (قص مستقل ✂️)</span>
             </button>
           </div>
         </div>
